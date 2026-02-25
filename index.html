@@ -111,16 +111,10 @@
         <h2 class="text-center mb-4 fw-bold"><i class="bi bi-calendar3"></i> 派克教班日期</h2>
         
         <div class="controls-box text-center">
-            <div class="mb-4 border-bottom pb-4">
-                <a href="https://harryleung522.github.io/pi-tutor-reminder/" target="_blank" class="btn btn-accent w-100">
-                    <i class="bi bi-box-arrow-up-right"></i> 前往導師提示器網站
-                </a>
-            </div>
-
-            <div class="row g-3 text-start">
+            <div class="row g-3 text-start mb-3">
                 <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師</label>
-                    <select id="filterTutor" class="form-select">
+                    <label class="form-label fw-bold">選取導師1</label>
+                    <select id="filterTutor1" class="form-select">
                         <option value="all">顯示所有導師</option>
                     </select>
                 </div>
@@ -136,6 +130,27 @@
                         <option value="dayGridMonth">月曆視圖 (顯示所有)</option>
                         <option value="dayGridWeek">一週日曆 (格子)</option>
                         <option value="listWeek">週列表 (清單)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row g-3 text-start">
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">選取導師2</label>
+                    <select id="filterTutor2" class="form-select">
+                        <option value="none">無</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">選取導師3</label>
+                    <select id="filterTutor3" class="form-select">
+                        <option value="none">無</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold">選取導師4</label>
+                    <select id="filterTutor4" class="form-select">
+                        <option value="none">無</option>
                     </select>
                 </div>
             </div>
@@ -182,7 +197,10 @@
             initCalendar();
             fetchData();
             
-            document.getElementById('filterTutor').addEventListener('change', refreshCalendar);
+            // 綁定 4 個導師選單的事件
+            ['filterTutor1', 'filterTutor2', 'filterTutor3', 'filterTutor4'].forEach(id => {
+                document.getElementById(id).addEventListener('change', refreshCalendar);
+            });
             document.getElementById('filterCourse').addEventListener('change', refreshCalendar);
             document.getElementById('viewSelect').addEventListener('change', (e) => calendar.changeView(e.target.value));
             
@@ -255,7 +273,7 @@
                                 if(sOrder === -1) sOrder = 99;
 
                                 allEvents.push({
-                                    title: cleanName + " | " + col[0], // 列表視圖會用到 title
+                                    title: cleanName + " | " + col[0],
                                     start: date,
                                     school: col[0],
                                     course: col[1],
@@ -284,7 +302,13 @@
         }
 
         function populateTutorSelect(tutorSet) {
-            const s = document.getElementById('filterTutor');
+            const selects = [
+                document.getElementById('filterTutor1'),
+                document.getElementById('filterTutor2'),
+                document.getElementById('filterTutor3'),
+                document.getElementById('filterTutor4')
+            ];
+
             const tutors = Array.from(tutorSet);
             tutors.sort((a, b) => {
                 let indexA = PRIORITY_TUTORS.indexOf(a);
@@ -294,10 +318,15 @@
                 if (indexB !== -1) return 1;
                 return a.localeCompare(b);
             });
+
+            // 把導師資料放入4個選單中
             tutors.forEach(t => {
-                let o = document.createElement('option');
-                o.value = o.text = t;
-                s.appendChild(o);
+                selects.forEach(s => {
+                    let o = document.createElement('option');
+                    o.value = t;
+                    o.text = t;
+                    s.appendChild(o);
+                });
             });
         }
 
@@ -311,12 +340,26 @@
         }
 
         function refreshCalendar() {
-            const t = document.getElementById('filterTutor').value;
+            // 取得 4 個導師選單的值
+            const t1 = document.getElementById('filterTutor1').value;
+            const t2 = document.getElementById('filterTutor2').value;
+            const t3 = document.getElementById('filterTutor3').value;
+            const t4 = document.getElementById('filterTutor4').value;
             const c = document.getElementById('filterCourse').value;
+
+            // 整理已選擇的導師（排除 "none"）
+            const selectedTutors = [t1, t2, t3, t4].filter(val => val !== 'none');
+            // 如果其中有 "all"，則代表顯示全部
+            const showAllTutors = selectedTutors.includes('all');
+
             calendar.removeAllEvents();
-            let filtered = allEvents.filter(e => 
-                (t === 'all' || e.tutor === t) && (c === 'all' || e.course === c)
-            );
+            
+            let filtered = allEvents.filter(e => {
+                const matchTutor = showAllTutors || selectedTutors.includes(e.tutor);
+                const matchCourse = (c === 'all' || e.course === c);
+                return matchTutor && matchCourse;
+            });
+            
             calendar.addEventSource(filtered);
         }
 
