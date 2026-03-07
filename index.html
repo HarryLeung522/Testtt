@@ -1,440 +1,267 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>派克教班日期</title>
-    
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
+    <title>鏡頭辨識網站</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
     <style>
-        :root {
-            --primary-color: #2c3e50; 
-            --bg-light: #f4f7f6;      
-            --card-border: #d6eaf8;   
-        }
-
         body {
-            font-family: "Microsoft JhengHei", sans-serif;
-            background-color: var(--bg-light);
-            color: var(--primary-color);
-        }
-
-        .main-container {
-            max-width: 1200px;
-            margin: 30px auto;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        }
-
-        .controls-box {
-            background: #ebf5fb;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            text-align: center;
+            background-color: #f4f4f9;
+            margin: 0;
             padding: 20px;
-            border-radius: 10px;
-            border: 1px solid var(--card-border);
-            margin-bottom: 25px;
         }
-
-        .btn-accent {
-            background-color: #27ae60;
-            border: none;
-            color: white;
-            font-weight: 600;
+        h1 {
+            color: #333;
+        }
+        .btn {
             padding: 10px 20px;
-            text-decoration: none;
-            display: inline-block;
-            border-radius: 6px;
-            transition: opacity 0.2s;
-        }
-        .btn-accent:hover { opacity: 0.8; color: white; }
-
-        /* 移除所有連結底線 */
-        a { text-decoration: none !important; }
-        .fc-col-header-cell-cushion, .fc-daygrid-day-number, .fc-list-day-text, .fc-list-day-side-text {
-            text-decoration: none !important;
-            color: var(--primary-color) !important;
-        }
-
-        .fc .fc-button-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-        
-        .fc-event {
+            font-size: 16px;
             cursor: pointer;
             border: none;
-            background-color: #ffffff !important;
-            color: #333 !important;
-            padding: 2px 5px;
-            margin-bottom: 2px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 5px;
+            margin: 5px;
+            transition: opacity 0.2s;
+        }
+        .btn:hover { opacity: 0.8; }
+        .btn-orange { background-color: #ff9800; color: white; }
+        .btn-blue { background-color: #2196F3; color: white; }
+        .btn-green { background-color: #4CAF50; color: white; }
+        .btn-icon { background-color: #607D8B; color: white; border-radius: 50%; width: 40px; height: 40px; padding: 0;}
+        
+        .control-panel {
+            margin: 20px auto;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 600px;
+        }
+        input[type="text"] {
+            width: 70%;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px solid #ccc;
             border-radius: 4px;
         }
-
-        /* 導師顏色邊框 */
-        .tutor-border-default { border-left: 5px solid #3498db !important; } 
-        .tutor-border-harry { border-left: 5px solid #f39c12 !important; }   
-        .tutor-border-zoe { border-left: 5px solid #27ae60 !important; }     
-        .tutor-border-ian { border-left: 5px solid #e74c3c !important; }     
-        .tutor-border-chris { border-left: 5px solid #8e44ad !important; }   
-
-        .event-time { font-weight: 700; color: #444; }
-        .event-tutor { font-size: 0.85em; color: #666; font-style: italic; }
-
-        /* 讓月曆格子高度隨內容自動撐開，不顯示 +more */
-        .fc-daygrid-day-events {
-            padding-bottom: 10px !important;
+        
+        .main-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+        }
+        
+        #webcam-container {
+            margin: 15px 0;
+            border: 3px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            display: inline-block;
+        }
+        /* 用於水平翻轉畫面的 CSS 類別 */
+        .flipped {
+            transform: scaleX(-1);
         }
 
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
-        
-        .detail-item {
-            font-size: 0.95rem;
-            color: #333;
+        #result-box {
+            margin-top: 10px;
+            padding: 15px;
+            background-color: #e3f2fd;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #0d47a1;
+            min-width: 300px;
         }
     </style>
 </head>
 <body>
 
-    <div id="loading">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-3 fw-bold">正在讀取派克教班資料...</p>
+    <h1>鏡頭辨識網站</h1>
+    
+    <button id="btn-connect" class="btn btn-orange">連接 Micro:bit</button>
+    <div id="serial-status" style="font-size: 12px; color: gray;">尚未連接</div>
+
+    <div class="control-panel">
+        <input type="text" id="model-url" placeholder="請輸入 Teachable Machine 模型網址 (例如: https://teachablemachine.../)">
+        <button id="btn-load" class="btn btn-blue">確認載入模型</button>
+        <div id="model-status" style="font-size: 12px; color: gray; margin-top: 5px;">等待輸入網址...</div>
     </div>
 
-    <div class="main-container">
-        <h2 class="text-center mb-4 fw-bold"><i class="bi bi-calendar3"></i> 派克教班日期</h2>
-        
-        <div class="controls-box text-center">
-            <div class="row g-3 text-start mb-3">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師1</label>
-                    <select id="filterTutor1" class="form-select">
-                        <option value="all">顯示所有導師</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取課程</label>
-                    <select id="filterCourse" class="form-select">
-                        <option value="all">顯示所有課程</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">顯示模式</label>
-                    <select id="viewSelect" class="form-select">
-                        <option value="dayGridMonth">月曆視圖 (顯示所有)</option>
-                        <option value="dayGridWeek">一週日曆 (格子)</option>
-                        <option value="listWeek">週列表 (清單)</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row g-3 text-start">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師2</label>
-                    <select id="filterTutor2" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師3</label>
-                    <select id="filterTutor3" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師4</label>
-                    <select id="filterTutor4" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-            </div>
+    <div class="main-content">
+        <div>
+            <button id="btn-toggle" class="btn btn-green">開始辨識</button>
+            <button id="btn-flip" class="btn btn-icon" title="水平翻轉">🔄</button>
         </div>
-
-        <div id="calendar"></div>
-
-        <div class="controls-box mt-5">
-            <h3 class="text-center mb-4 fw-bold"><i class="bi bi-search"></i> 按學校/課程顯示</h3>
-            <div class="row g-3 text-start">
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">學校名稱 (A行)</label>
-                    <select id="schoolSelect" class="form-select">
-                        <option value="">請先選擇學校...</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">課程名稱 (I行)</label>
-                    <select id="schoolCourseSelect" class="form-select" disabled>
-                        <option value="">請選擇課程...</option>
-                    </select>
-                </div>
+        
+        <div id="webcam-container">
             </div>
-            <div id="courseDetailsList" class="mt-4 list-group"></div>
+
+        <div id="result-box">
+            結果將顯示於此
         </div>
     </div>
 
     <script>
-        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQFFF43IJhu4qgR8KiR_Oo9lwv7LkuTcjHzebpTvUd-SnnivG_5GwDT3-JzEncLTxKXbZuQ8LnU90n3/pub?output=csv';
-        let allEvents = [];
-        let rawSheetData = []; // 用於存放完整的原始資料，供下方搜尋區塊使用
-        let calendar;
+        // --- 變數宣告 ---
+        let model, webcam, maxPredictions;
+        let isPredicting = false;
+        let serialPort = null;
+        let serialWriter = null;
 
-        const TUTOR_COLORS = {
-            'Harry': 'tutor-border-harry',
-            'Zoe': 'tutor-border-zoe',
-            'Ian': 'tutor-border-ian',
-            'Chris': 'tutor-border-chris'
-        };
+        // --- DOM 元素取得 ---
+        const btnConnect = document.getElementById('btn-connect');
+        const serialStatus = document.getElementById('serial-status');
+        const btnLoad = document.getElementById('btn-load');
+        const modelUrlInput = document.getElementById('model-url');
+        const modelStatus = document.getElementById('model-status');
+        const btnToggle = document.getElementById('btn-toggle');
+        const btnFlip = document.getElementById('btn-flip');
+        const webcamContainer = document.getElementById('webcam-container');
+        const resultBox = document.getElementById('result-box');
 
-        const PRIORITY_TUTORS = ['Harry', 'Zoe', 'Chris', 'Ian'];
-
-        document.addEventListener('DOMContentLoaded', function() {
-            initCalendar();
-            fetchData();
-            
-            // 綁定 4 個導師選單的事件
-            ['filterTutor1', 'filterTutor2', 'filterTutor3', 'filterTutor4'].forEach(id => {
-                document.getElementById(id).addEventListener('change', refreshCalendar);
-            });
-            document.getElementById('filterCourse').addEventListener('change', refreshCalendar);
-            document.getElementById('viewSelect').addEventListener('change', (e) => calendar.changeView(e.target.value));
-            
-            // 綁定新的選單事件
-            setupSchoolCourseListeners();
+        // --- 1. Web Serial API (連接 Micro:bit) ---
+        btnConnect.addEventListener('click', async () => {
+            try {
+                // 請求使用者選擇 Serial Port
+                serialPort = await navigator.serial.requestPort();
+                // 開啟 Serial Port，Baud Rate 設為 115200 (micro:bit 常用預設值)
+                await serialPort.open({ baudRate: 115200 });
+                
+                const textEncoder = new TextEncoderStream();
+                const writableStreamClosed = textEncoder.readable.pipeTo(serialPort.writable);
+                serialWriter = textEncoder.writable.getWriter();
+                
+                serialStatus.innerText = "Micro:bit 已連接！";
+                serialStatus.style.color = "green";
+                btnConnect.innerText = "已連接";
+                btnConnect.style.backgroundColor = "#4CAF50";
+            } catch (err) {
+                console.error("Serial 連接錯誤:", err);
+                serialStatus.innerText = "連接失敗或被取消。";
+                serialStatus.style.color = "red";
+            }
         });
 
-        function initCalendar() {
-            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-                initialView: 'dayGridMonth',
-                locale: 'zh-tw',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-                eventOrder: "sortOrder,start",
-                // 關鍵設定：強制顯示所有事件，不收縮成 +more
-                dayMaxEvents: false,
-                dayMaxEventRows: false,
-                eventContent: function(arg) {
-                    let p = arg.event.extendedProps;
-                    let colorClass = TUTOR_COLORS[p.tutor] || 'tutor-border-default';
-                    
-                    // 列表模式下的顯示略有不同，但這裡統一使用 HTML 結構
-                    return {
-                        html: `<div class="${colorClass}" style="padding-left: 5px;">
-                                <div class="event-time">${p.timeStr} <span class="event-tutor">| ${p.tutor}</span></div>
-                                <div class="small text-truncate" style="color:#000">${p.school}</div>
-                               </div>`
-                    };
+        // 傳送資料到 Micro:bit 的輔助函數
+        async function sendToMicrobit(data) {
+            if (serialWriter) {
+                try {
+                    await serialWriter.write(data + '\n'); // 加上換行符號
+                } catch (err) {
+                    console.error("寫入 Serial 失敗:", err);
                 }
-            });
-            calendar.render();
+            }
         }
 
-        function fetchData() {
-            Papa.parse(CSV_URL, {
-                download: true,
-                complete: function(results) {
-                    const rows = results.data;
-                    let tutorSet = new Set();
-                    let courseSet = new Set();
-                    let schoolSetForDisplay = new Set(); // 給下方查詢區塊用的學校清單
-                    
-                    rawSheetData = []; // 初始化
+        // --- 2. 載入模型與鏡頭 ---
+        btnLoad.addEventListener('click', async () => {
+            let url = modelUrlInput.value.trim();
+            if (!url) {
+                alert("請先輸入模型網址！");
+                return;
+            }
+            // 確保網址結尾有 '/'
+            if (!url.endsWith('/')) {
+                url += '/';
+            }
 
-                    for (let i = 1; i < rows.length; i++) {
-                        let col = rows[i];
-                        if (!col[0] || !col[3]) continue;
-                        
-                        // 儲存完整資料給下方「按學校/課程顯示」使用
-                        // A=0, C=2, D=3, E=4, F=5, G=6, I=8
-                        rawSheetData.push({
-                            A: (col[0] || '').trim(),
-                            C: (col[2] || '').trim(),
-                            D: (col[3] || '').trim(),
-                            E: (col[4] || '').trim(),
-                            F: (col[5] || '').trim(),
-                            G: (col[6] || '').trim(),
-                            I: (col[8] || '').trim()
-                        });
-                        
-                        schoolSetForDisplay.add((col[0] || '').trim());
+            const modelURL = url + "model.json";
+            const metadataURL = url + "metadata.json";
 
-                        let date = parseDate(col[3]);
-                        if (date) {
-                            let tutorsInRow = col[6] ? col[6].split('/') : ['未指定'];
-                            tutorsInRow.forEach(tName => {
-                                let cleanName = tName.trim();
-                                if(cleanName === "") return;
-                                
-                                let sOrder = PRIORITY_TUTORS.indexOf(cleanName);
-                                if(sOrder === -1) sOrder = 99;
+            try {
+                modelStatus.innerText = "模型載入中，請稍候...";
+                
+                // 載入模型
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
 
-                                allEvents.push({
-                                    title: cleanName + " | " + col[0],
-                                    start: date,
-                                    school: col[0],
-                                    course: col[1],
-                                    timeStr: col[5],
-                                    tutor: cleanName,
-                                    sortOrder: sOrder
-                                });
-                                tutorSet.add(cleanName);
-                            });
-                            if(col[1]) courseSet.add(col[1].trim());
-                        }
-                    }
-                    populateTutorSelect(tutorSet);
-                    populateSelect('filterCourse', courseSet);
-                    populateSchoolSelect(schoolSetForDisplay);
-                    
-                    refreshCalendar();
-                    document.getElementById('loading').style.display = 'none';
+                // 設定並啟動鏡頭
+                const flip = true; // 預設 Teachable Machine 也是水平翻轉的
+                webcam = new tmImage.Webcam(400, 300, flip); // 寬, 高, 是否翻轉
+                await webcam.setup(); // 請求攝影機權限
+                await webcam.play();
+                
+                // 將畫布加入 DOM
+                webcamContainer.innerHTML = '';
+                webcamContainer.appendChild(webcam.canvas);
+                
+                modelStatus.innerText = "模型與鏡頭載入完成！";
+                modelStatus.style.color = "green";
+                
+                // 開始刷新鏡頭畫面 (還沒開始辨識，純顯示畫面)
+                window.requestAnimationFrame(updateWebcam);
+
+            } catch (error) {
+                console.error("模型載入失敗:", error);
+                modelStatus.innerText = "載入失敗，請檢查網址或開發者工具(F12)。";
+                modelStatus.style.color = "red";
+            }
+        });
+
+        // 持續更新鏡頭畫面的迴圈
+        async function updateWebcam() {
+            if (webcam) {
+                webcam.update(); // 更新鏡頭畫面
+                if (isPredicting) {
+                    await predict();
                 }
-            });
+            }
+            window.requestAnimationFrame(updateWebcam);
         }
 
-        function parseDate(s) {
-            const m = s.match(/(\d+)年(\d+)月(\d+)日/);
-            return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
-        }
-
-        function populateTutorSelect(tutorSet) {
-            const selects = [
-                document.getElementById('filterTutor1'),
-                document.getElementById('filterTutor2'),
-                document.getElementById('filterTutor3'),
-                document.getElementById('filterTutor4')
-            ];
-
-            const tutors = Array.from(tutorSet);
-            tutors.sort((a, b) => {
-                let indexA = PRIORITY_TUTORS.indexOf(a);
-                let indexB = PRIORITY_TUTORS.indexOf(b);
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                if (indexA !== -1) return -1;
-                if (indexB !== -1) return 1;
-                return a.localeCompare(b);
-            });
-
-            // 把導師資料放入4個選單中
-            tutors.forEach(t => {
-                selects.forEach(s => {
-                    let o = document.createElement('option');
-                    o.value = t;
-                    o.text = t;
-                    s.appendChild(o);
-                });
-            });
-        }
-
-        function populateSelect(id, data) {
-            const s = document.getElementById(id);
-            Array.from(data).sort().forEach(t => {
-                let o = document.createElement('option');
-                o.value = o.text = t;
-                s.appendChild(o);
-            });
-        }
-
-        function refreshCalendar() {
-            // 取得 4 個導師選單的值
-            const t1 = document.getElementById('filterTutor1').value;
-            const t2 = document.getElementById('filterTutor2').value;
-            const t3 = document.getElementById('filterTutor3').value;
-            const t4 = document.getElementById('filterTutor4').value;
-            const c = document.getElementById('filterCourse').value;
-
-            // 整理已選擇的導師（排除 "none"）
-            const selectedTutors = [t1, t2, t3, t4].filter(val => val !== 'none');
-            // 如果其中有 "all"，則代表顯示全部
-            const showAllTutors = selectedTutors.includes('all');
-
-            calendar.removeAllEvents();
+        // --- 3. 開始/暫停辨識 ---
+        btnToggle.addEventListener('click', () => {
+            if (!model || !webcam) {
+                alert("請先載入模型並開啟鏡頭！");
+                return;
+            }
             
-            let filtered = allEvents.filter(e => {
-                const matchTutor = showAllTutors || selectedTutors.includes(e.tutor);
-                const matchCourse = (c === 'all' || e.course === c);
-                return matchTutor && matchCourse;
-            });
+            isPredicting = !isPredicting;
+            if (isPredicting) {
+                btnToggle.innerText = "暫停辨識";
+                btnToggle.style.backgroundColor = "#f44336"; // 變成紅色
+            } else {
+                btnToggle.innerText = "開始辨識";
+                btnToggle.style.backgroundColor = "#4CAF50"; // 變成綠色
+                resultBox.innerText = "辨識已暫停";
+            }
+        });
+
+        // --- 4. 水平翻轉畫面 ---
+        btnFlip.addEventListener('click', () => {
+            // 這裡使用 CSS 類別來進行視覺上的水平翻轉
+            webcamContainer.classList.toggle('flipped');
+        });
+
+        // --- 5. 執行辨識 ---
+        async function predict() {
+            // 預測結果
+            const prediction = await model.predict(webcam.canvas);
             
-            calendar.addEventSource(filtered);
-        }
-
-        // ================= 學校/課程連動查詢邏輯 =================
-
-        function populateSchoolSelect(schoolSet) {
-            const schoolSelect = document.getElementById('schoolSelect');
-            Array.from(schoolSet).sort().forEach(school => {
-                if(school) {
-                    let opt = document.createElement('option');
-                    opt.value = opt.text = school;
-                    schoolSelect.appendChild(opt);
+            // 找出機率最高的那一個類別
+            let bestPrediction = prediction[0];
+            for (let i = 1; i < maxPredictions; i++) {
+                if (prediction[i].probability > bestPrediction.probability) {
+                    bestPrediction = prediction[i];
                 }
-            });
-        }
+            }
 
-        function setupSchoolCourseListeners() {
-            const schoolSelect = document.getElementById('schoolSelect');
-            const courseSelect = document.getElementById('schoolCourseSelect');
-            const detailList = document.getElementById('courseDetailsList');
+            // 顯示結果 (類別名稱 + 相似度百分比)
+            const className = bestPrediction.className;
+            const probability = (bestPrediction.probability * 100).toFixed(2);
+            resultBox.innerText = `結果: ${className} (相似度: ${probability}%)`;
 
-            // 選擇學校後，更新課程選單
-            schoolSelect.addEventListener('change', function() {
-                const selectedSchool = this.value;
-                
-                // 重置課程與結果列表
-                courseSelect.innerHTML = '<option value="">請選擇課程...</option>';
-                detailList.innerHTML = '';
-                
-                if (!selectedSchool) {
-                    courseSelect.disabled = true;
-                    return;
-                }
-                
-                courseSelect.disabled = false;
-                let courseSetForSchool = new Set();
-                
-                // 篩選出該學校的所有課程 (I行)
-                rawSheetData.filter(r => r.A === selectedSchool).forEach(r => {
-                    if (r.I) courseSetForSchool.add(r.I);
-                });
-                
-                Array.from(courseSetForSchool).sort().forEach(c => {
-                    let opt = document.createElement('option');
-                    opt.value = opt.text = c;
-                    courseSelect.appendChild(opt);
-                });
-            });
-
-            // 選擇課程後，顯示格式化資料
-            courseSelect.addEventListener('change', function() {
-                const selectedSchool = schoolSelect.value;
-                const selectedCourse = this.value;
-                
-                detailList.innerHTML = ''; // 清空列表
-                
-                if (!selectedCourse) return;
-                
-                // 篩選符合學校與課程的資料列
-                const filteredData = rawSheetData.filter(r => r.A === selectedSchool && r.I === selectedCourse);
-                
-                if(filteredData.length === 0) {
-                    detailList.innerHTML = '<div class="list-group-item text-muted">無相關資料</div>';
-                    return;
-                }
-
-                filteredData.forEach(r => {
-                    let item = document.createElement('div');
-                    item.className = 'list-group-item detail-item';
-                    
-                    // 要求的格式：A行-I行-C行-G行- D行-E行-F行
-                    item.innerHTML = `<strong>${r.A}</strong> - ${r.I} - ${r.C} - ${r.G} - ${r.D} - ${r.E} - ${r.F}`;
-                    detailList.appendChild(item);
-                });
-            });
+            // 如果有連接 Micro:bit，可以將結果傳送過去 (例如傳送類別名稱)
+            // 這裡設定當相似度大於 80% 時才發送，避免雜訊干擾
+            if (serialWriter && bestPrediction.probability > 0.8) {
+                 sendToMicrobit(className);
+            }
         }
     </script>
 </body>
