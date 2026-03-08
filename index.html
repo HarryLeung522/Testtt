@@ -1,251 +1,120 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 鏡頭辨識與 Micro:bit 連動</title>
+    <title>奶龍偵察器</title>
     <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, sans-serif;
-            text-align: center;
-            background-color: #f4f4f9;
-            padding: 20px;
-            margin: 0;
-        }
-        .btn {
-            padding: 10px 20px; font-size: 16px; cursor: pointer;
-            border: none; border-radius: 5px; margin: 5px; color: white;
-            transition: opacity 0.2s;
-        }
-        .btn:hover { opacity: 0.8; }
-        .btn-orange { background-color: #ff9800; }
-        .btn-green { background-color: #4CAF50; }
-        .btn-red { background-color: #f44336; }
-        .btn:disabled { background-color: #ccc; cursor: not-allowed; }
-        
-        /* 讓鏡頭和畫布可以重疊顯示 */
-        .video-wrapper {
-            position: relative;
-            display: inline-block;
-            margin: 20px auto;
-            border: 3px solid #333;
-            border-radius: 8px;
-            overflow: hidden;
-            background-color: #000;
-        }
-        video {
-            display: block;
-        }
-        #draw-canvas {
-            position: absolute;
-            top: 0;
-            left: 0;
-            z-index: 10;
-        }
-        
-        .status-text {
-            font-size: 18px;
-            font-weight: bold;
-            color: #d32f2f;
-            margin: 10px 0;
-        }
-
-        #raw-json-box {
-            margin: 10px auto; padding: 15px;
-            background-color: #e3f2fd; border: 2px solid #2196F3;
-            border-radius: 8px; font-size: 14px; color: #333;
-            max-width: 800px; text-align: left;
-            white-space: pre-wrap; word-wrap: break-word;
-            max-height: 250px; overflow-y: auto;
-        }
+        body { font-family: sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        video { width: 100%; max-width: 640px; border-radius: 10px; background: #000; }
+        .controls { margin: 20px 0; }
+        button { background-color: #6366f1; color: white; border: none; padding: 12px 24px; font-size: 18px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
+        button:hover { background-color: #4f46e5; }
+        button:disabled { background-color: #ccc; }
+        #result-container { text-align: left; background: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; overflow-x: auto; min-height: 100px; margin-top: 20px; }
+        .status { margin: 10px 0; color: #666; font-style: italic; }
+        canvas { display: none; } /* 隱藏截圖用的畫布 */
     </style>
 </head>
 <body>
 
-    <h1>AI 鏡頭辨識與 Micro:bit</h1>
+<div class="container">
+    <h1>🐲 奶龍偵察器</h1>
+    <p>模型類型: Roboflow 3.0 Object Detection (Fast)</p>
+
+    <div class="video-section">
+        <video id="webcam" autoplay playsinline></video>
+        <p>USB Camera / Web camera</p>
+    </div>
+
+    <div class="controls">
+        <button id="capture-btn">開始辨認</button>
+        <div id="status" class="status">等待操作...</div>
+    </div>
+
+    <hr>
     
-    <div>
-        <button id="btn-connect" class="btn btn-orange">1. 連接 Micro:bit</button>
-        <span id="serial-status" style="color: gray; font-size: 14px; margin-left: 10px;">尚未連接</span>
-    </div>
+    <h3>辨認結果 / 網站回傳資訊：</h3>
+    <pre id="result-container">尚未有資料...</pre>
+</div>
 
-    <div style="margin-top: 15px;">
-        <button id="btn-start" class="btn btn-green">2. 開啟鏡頭並開始辨識</button>
-        <button id="btn-stop" class="btn btn-red" disabled>停止</button>
-    </div>
+<canvas id="snapshot"></canvas>
 
-    <div id="detection-status" class="status-text">等待開始...</div>
+<script>
+    const video = document.getElementById('webcam');
+    const canvas = document.getElementById('snapshot');
+    const captureBtn = document.getElementById('capture-btn');
+    const resultContainer = document.getElementById('result-container');
+    const statusDiv = document.getElementById('status');
 
-    <div class="video-wrapper">
-        <video id="webcam" width="640" height="480" autoplay playsinline></video>
-        <canvas id="draw-canvas" width="640" height="480"></canvas>
-    </div>
+    const API_KEY = "s1Lu70khq7Ymo6iCuiFw";
+    const API_URL = "https://serverless.roboflow.com/harrys-workspace-wrtc8/workflows/custom-workflow";
 
-    <canvas id="capture-canvas" width="640" height="480" style="display: none;"></canvas>
-
-    <h3>Roboflow 原始回傳資料 (供除錯用):</h3>
-    <div id="raw-json-box">API 資料將顯示於此...</div>
-
-    <script>
-        // --- 變數設定 (請確保 API Key 與 URL 正確) ---
-        const API_KEY = 's1Lu70khq7Ymo6iCuiFw'; 
-        const WORKFLOW_URL = 'https://serverless.roboflow.com/harrys-workspace-wrtc8/workflows/detect-and-classify';
-        
-        // DOM 元素
-        const video = document.getElementById('webcam');
-        const captureCanvas = document.getElementById('capture-canvas');
-        const captureCtx = captureCanvas.getContext('2d');
-        const drawCanvas = document.getElementById('draw-canvas');
-        const drawCtx = drawCanvas.getContext('2d');
-        const rawJsonBox = document.getElementById('raw-json-box');
-        const detectionStatus = document.getElementById('detection-status');
-        const btnStart = document.getElementById('btn-start');
-        const btnStop = document.getElementById('btn-stop');
-        const btnConnect = document.getElementById('btn-connect');
-        const serialStatus = document.getElementById('serial-status');
-        
-        let stream = null;
-        let inferenceInterval = null;
-        let serialPort = null;
-        let serialWriter = null;
-
-        // --- 1. 連接 Micro:bit (Web Serial API) ---
-        btnConnect.addEventListener('click', async () => {
-            try {
-                serialPort = await navigator.serial.requestPort();
-                await serialPort.open({ baudRate: 115200 }); // Micro:bit 預設 Baud Rate
-                const textEncoder = new TextEncoderStream();
-                textEncoder.readable.pipeTo(serialPort.writable);
-                serialWriter = textEncoder.writable.getWriter();
-                
-                serialStatus.innerText = "Micro:bit 已連接！";
-                serialStatus.style.color = "green";
-                btnConnect.innerText = "已連接";
-                btnConnect.style.backgroundColor = "#4CAF50";
-            } catch (err) {
-                console.error("Serial 連接錯誤:", err);
-                serialStatus.innerText = "連接失敗或被取消";
-                serialStatus.style.color = "red";
-            }
-        });
-
-        // --- 2. 開啟鏡頭 ---
-        btnStart.addEventListener('click', async () => {
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
-                video.srcObject = stream;
-                
-                btnStart.disabled = true;
-                btnStop.disabled = false;
-                detectionStatus.innerText = "辨識進行中，請將物品放到鏡頭前...";
-                detectionStatus.style.color = "#2196F3";
-
-                // 每 1.2 秒擷取一次畫面送給 API (避免消耗太多額度)
-                inferenceInterval = setInterval(captureAndPredict, 1200);
-            } catch (err) {
-                alert("無法開啟攝影機！請確保：\n1. 網址是 localhost 或 https\n2. 已允許瀏覽器使用攝影機");
-            }
-        });
-
-        // --- 3. 停止辨識 ---
-        btnStop.addEventListener('click', () => {
-            if (inferenceInterval) clearInterval(inferenceInterval);
-            if (stream) stream.getTracks().forEach(track => track.stop());
-            video.srcObject = null;
-            btnStart.disabled = false;
-            btnStop.disabled = true;
-            drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height); // 清除畫布上的框框
-            detectionStatus.innerText = "已停止辨識。";
-            detectionStatus.style.color = "#d32f2f";
-        });
-
-        // --- 4. 擷取畫面、呼叫 API 與畫框框 ---
-        async function captureAndPredict() {
-            // 將影像畫到隱藏畫布並轉成 Base64
-            captureCtx.drawImage(video, 0, 0, captureCanvas.width, captureCanvas.height);
-            const dataUrl = captureCanvas.toDataURL('image/jpeg', 0.8);
-            const base64Image = dataUrl.split(',')[1];
-
-            try {
-                // 發送請求給 Roboflow
-                const response = await fetch(WORKFLOW_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        api_key: API_KEY,
-                        inputs: {
-                            "image": {"type": "base64", "value": base64Image}
-                        }
-                    })
-                });
-
-                const result = await response.json();
-                
-                // 把原始資料印在畫面上，方便除錯
-                rawJsonBox.innerText = JSON.stringify(result, null, 2);
-                
-                // 清空上一秒畫的框框
-                drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-
-                // --- 🌟 核心邏輯：自動尋找 predictions 陣列 ---
-                let predictions = [];
-                
-                if (result.predictions) {
-                    // 標準 API 格式
-                    predictions = result.predictions;
-                } else if (result.outputs && Array.isArray(result.outputs) && result.outputs.length > 0) {
-                    // Workflow 格式：遍歷 outputs[0] 裡面的所有 key，找出包含 predictions 的那個
-                    const outputObj = result.outputs[0];
-                    for (const key in outputObj) {
-                        if (outputObj[key] && Array.isArray(outputObj[key].predictions)) {
-                            predictions = outputObj[key].predictions;
-                            break; // 找到就停止搜尋
-                        }
-                    }
-                }
-
-                // 更新狀態文字
-                detectionStatus.innerText = `畫面中找到 ${predictions.length} 個物體`;
-                detectionStatus.style.color = predictions.length > 0 ? "#4CAF50" : "#ff9800";
-
-                // --- 5. 畫出每一個找到的物體 ---
-                predictions.forEach(pred => {
-                    // Roboflow 通常回傳中心點座標 (x, y)，需轉換為畫布用的左上角座標
-                    const width = pred.width;
-                    const height = pred.height;
-                    const x = pred.x - (width / 2);
-                    const y = pred.y - (height / 2);
-                    const className = pred.class;
-                    const confidence = Math.round(pred.confidence * 100);
-
-                    // 畫追蹤框線
-                    drawCtx.strokeStyle = "#00FF00"; // 螢光綠
-                    drawCtx.lineWidth = 3;
-                    drawCtx.strokeRect(x, y, width, height);
-
-                    // 畫文字背景方塊
-                    drawCtx.fillStyle = "#00FF00";
-                    drawCtx.fillRect(x, y - 25, width + 40, 25);
-
-                    // 畫文字 (類別與信心度)
-                    drawCtx.fillStyle = "#000000"; // 黑色文字
-                    drawCtx.font = "bold 16px Arial";
-                    drawCtx.fillText(`${className} ${confidence}%`, x + 5, y - 7);
-
-                    // --- 6. 透過 Serial 傳送給 Micro:bit ---
-                    // 設定條件：信心度大於 70% 才傳送，避免雜訊
-                    if (serialWriter && pred.confidence > 0.70) {
-                        // 加上 \n 換行符號，讓 Micro:bit 知道這是一筆完整的資料
-                        serialWriter.write(className + '\n');
-                        console.log(`已傳送至 Micro:bit: ${className}`);
-                    }
-                });
-
-            } catch (error) {
-                console.error("API 呼叫或繪圖錯誤:", error);
-                detectionStatus.innerText = "API 請求發生錯誤，請檢查網路連線。";
-            }
+    // 1. 初始化鏡頭
+    async function initWebcam() {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ 
+                video: { facingMode: "environment" } // 優先使用後置鏡頭（如果是手機）
+            });
+            video.srcObject = stream;
+        } catch (err) {
+            console.error("無法開啟鏡頭: ", err);
+            statusDiv.innerText = "錯誤：無法開啟鏡頭，請檢查權限。";
         }
-    </script>
+    }
+
+    // 2. 進行識別
+    captureBtn.addEventListener('click', async () => {
+        captureBtn.disabled = true;
+        statusDiv.innerText = "偵測中，請稍候...";
+        resultContainer.innerText = "正在呼叫 Roboflow API...";
+
+        // 從視訊擷取當前畫面
+        const context = canvas.getContext('2d');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        // 將圖片轉為 Base64
+        const imageData = canvas.toDataURL('image/jpeg', 0.8);
+        // 去掉 data:image/jpeg;base64, 標頭，僅保留純 base64 字串
+        const base64Image = imageData.split(',')[1];
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    api_key: API_KEY,
+                    inputs: {
+                        "image": {
+                            "type": "base64",
+                            "value": base64Image
+                        }
+                    }
+                })
+            });
+
+            const result = await response.json();
+            console.log(result);
+            
+            // 格式化顯示結果
+            resultContainer.innerText = JSON.stringify(result, null, 2);
+            statusDiv.innerText = "辨認完成！";
+
+        } catch (error) {
+            console.error("API 請求失敗:", error);
+            resultContainer.innerText = "請求失敗: " + error.message;
+            statusDiv.innerText = "辨認發生錯誤。";
+        } finally {
+            captureBtn.disabled = false;
+        }
+    });
+
+    // 啟動鏡頭
+    initWebcam();
+</script>
+
 </body>
 </html>
