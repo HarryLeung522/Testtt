@@ -3,30 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>奶龍偵察器</title>
+    <title>奶龍偵察器 V2 - 視覺化版</title>
     <style>
         body { font-family: sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
         .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        video { width: 100%; max-width: 640px; border-radius: 10px; background: #000; }
+        
+        /* 視訊容器，用於疊加 Canvas */
+        .video-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: auto;
+            border-radius: 10px;
+            overflow: hidden; /* 確保內容不會溢出圓角 */
+            background: #000;
+        }
+        
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        /* 重疊在視訊上的畫布 */
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* 讓點擊事件穿透畫布 */
+        }
+
         .controls { margin: 20px 0; }
         button { background-color: #6366f1; color: white; border: none; padding: 12px 24px; font-size: 18px; border-radius: 8px; cursor: pointer; transition: 0.3s; }
         button:hover { background-color: #4f46e5; }
         button:disabled { background-color: #ccc; }
+        
         #result-container { text-align: left; background: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; overflow-x: auto; min-height: 100px; margin-top: 20px; }
         .status { margin: 10px 0; color: #666; font-style: italic; }
-        canvas { display: none; } /* 隱藏截圖用的畫布 */
+        
+        /* 隱藏用於截圖的畫布 */
+        #snapshot-canvas { display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🐲 奶龍偵察器</h1>
-    <p>模型類型: Roboflow 3.0 Object Detection (Fast)</p>
+    <h1>🐲 奶龍偵察器 V2</h1>
+    <p>辨認模型: Roboflow 3.0 Object Detection (Fast)</p>
 
-    <div class="video-section">
+    <div class="video-container">
         <video id="webcam" autoplay playsinline></video>
-        <p>USB Camera / Web camera</p>
+        <canvas id="overlay-canvas"></canvas>
     </div>
+    <p style="margin-top:5px; color:#555;">USB Camera / Web camera</p>
 
     <div class="controls">
         <button id="capture-btn">開始辨認</button>
@@ -39,11 +70,14 @@
     <pre id="result-container">尚未有資料...</pre>
 </div>
 
-<canvas id="snapshot"></canvas>
+<canvas id="snapshot-canvas"></canvas>
 
 <script>
     const video = document.getElementById('webcam');
-    const canvas = document.getElementById('snapshot');
+    const overlayCanvas = document.getElementById('overlay-canvas');
+    const overlayCtx = overlayCanvas.getContext('2d');
+    const snapshotCanvas = document.getElementById('snapshot-canvas');
+    const snapshotCtx = snapshotCanvas.getContext('2d');
     const captureBtn = document.getElementById('capture-btn');
     const resultContainer = document.getElementById('result-container');
     const statusDiv = document.getElementById('status');
@@ -55,30 +89,83 @@
     async function initWebcam() {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
-                video: { facingMode: "environment" } // 優先使用後置鏡頭（如果是手機）
+                video: { facingMode: "environment" } // 優先使用後置鏡頭
             });
             video.srcObject = stream;
+            
+            // 重要：當視訊元資料載入後，調整疊加畫布的大小與視訊一致
+            video.addEventListener('loadedmetadata', () => {
+                resizeCanvas();
+            });
+            window.addEventListener('resize', resizeCanvas); // 視窗縮放時也重新調整
+
         } catch (err) {
             console.error("無法開啟鏡頭: ", err);
             statusDiv.innerText = "錯誤：無法開啟鏡頭，請檢查權限。";
         }
     }
 
-    // 2. 進行識別
+    // 將疊加畫布的大小設定為視訊的顯示大小
+    function resizeCanvas() {
+        // 使用 css 的顯示尺寸
+        overlayCanvas.width = video.clientWidth;
+        overlayCanvas.height = video.clientHeight;
+        console.log(`畫布重設大小為: ${overlayCanvas.width}x${overlayCanvas.height}`);
+    }
+
+    // 2. 在畫布上繪製偵測結果（綠色框和百分比）
+    function drawResults(predictions) {
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height); // 清除上一次的繪製
+
+        if (!predictions || predictions.length === 0) return;
+
+        // 計算視訊原始解析度與網頁顯示尺寸的比例
+        const videoRatioX = overlayCanvas.width / video.videoWidth;
+        const videoRatioY = overlayCanvas.height / video.videoHeight;
+
+        // 遍歷所有預測結果
+        predictions.forEach(pred => {
+            // Roboflow 回傳的是中心點 (x, y) 和寬高
+            // 將坐標映射到網頁顯示尺寸
+            const width = pred.width * videoRatioX;
+            const height = pred.height * videoRatioY;
+            const x = (pred.x - pred.width / 2) * videoRatioX; // 計算左上角 X
+            const y = (pred.y - pred.height / 2) * videoRatioY; // 計算左上角 Y
+
+            const className = pred.class || "未知";
+            const confidencePercent = (pred.confidence * 100).toFixed(1); // 轉為百分比，保留一位小數
+
+            // 繪製綠色方框
+            overlayCtx.strokeStyle = "#00FF00"; // 明亮的綠色
+            overlayCtx.lineWidth = 4;
+            overlayCtx.strokeRect(x, y, width, height);
+
+            // 繪製文字背景（讓文字更清晰）
+            overlayCtx.fillStyle = "rgba(0, 255, 0, 0.7)";
+            overlayCtx.font = "16px sans-serif";
+            const textWidth = overlayCtx.measureText(`${className} (${confidencePercent}%)`).width;
+            overlayCtx.fillRect(x, y - 20, textWidth + 10, 20);
+
+            // 繪製綠色文字
+            overlayCtx.fillStyle = "#FFFFFF"; // 文字用白色，在綠色背景上更清楚
+            overlayCtx.fillText(`${className} (${confidencePercent}%)`, x + 5, y - 5);
+        });
+    }
+
+    // 3. 進行識別
     captureBtn.addEventListener('click', async () => {
         captureBtn.disabled = true;
         statusDiv.innerText = "偵測中，請稍候...";
         resultContainer.innerText = "正在呼叫 Roboflow API...";
+        overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height); // 清空舊的框
 
-        // 從視訊擷取當前畫面
-        const context = canvas.getContext('2d');
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        // 從視訊擷取當前畫面 (用於 API 的 Base64 轉換，此時畫布大小為原始大小)
+        snapshotCanvas.width = video.videoWidth;
+        snapshotCanvas.height = video.videoHeight;
+        snapshotCtx.drawImage(video, 0, 0, snapshotCanvas.width, snapshotCanvas.height);
 
-        // 將圖片轉為 Base64
-        const imageData = canvas.toDataURL('image/jpeg', 0.8);
-        // 去掉 data:image/jpeg;base64, 標頭，僅保留純 base64 字串
+        // 將圖片轉為 Base64 (使用 JPEG 格式以加快傳輸)
+        const imageData = snapshotCanvas.toDataURL('image/jpeg', 0.8);
         const base64Image = imageData.split(',')[1];
 
         try {
@@ -99,9 +186,21 @@
             const result = await response.json();
             console.log(result);
             
-            // 格式化顯示結果
+            // 格式化顯示原始回傳資訊
             resultContainer.innerText = JSON.stringify(result, null, 2);
-            statusDiv.innerText = "辨認完成！";
+
+            // 提取預測結果並繪製在畫面上
+            // 注意：根據 workflow 的輸出設定，結果應該在 result.output.predictions
+            if (result.output && result.output.predictions) {
+                drawResults(result.output.predictions);
+                statusDiv.innerText = `辨認完成！偵測到 ${result.output.predictions.length} 個物體。`;
+            } else if (result.predictions) {
+                 // 有時 API 回傳格式可能直接包含 predictions
+                drawResults(result.predictions);
+                statusDiv.innerText = `辨認完成！偵測到 ${result.predictions.length} 個物體。`;
+            } else {
+                statusDiv.innerText = "辨認完成，但無偵測結果。";
+            }
 
         } catch (error) {
             console.error("API 請求失敗:", error);
