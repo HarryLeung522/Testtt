@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>奶龍偵察器 V3 - 即時串流版</title>
+    <title>奶龍偵察器 V3.1 - 修正解析版</title>
     <style>
         body { font-family: sans-serif; text-align: center; background-color: #f0f2f5; padding: 20px; }
         .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
@@ -15,7 +15,7 @@
             padding: 15px;
             margin-bottom: 20px;
             border-radius: 8px;
-            background-color: #e5e7eb; /* 預設灰色 */
+            background-color: #e5e7eb;
             color: #374151;
             transition: all 0.3s ease;
         }
@@ -48,7 +48,7 @@
         .controls { margin: 20px 0; }
         button { background-color: #6366f1; color: white; border: none; padding: 12px 24px; font-size: 18px; border-radius: 8px; cursor: pointer; transition: 0.3s; font-weight: bold; width: 200px; }
         button:hover { filter: brightness(0.9); }
-        button.stop-btn { background-color: #ef4444; } /* 停止按鈕變紅色 */
+        button.stop-btn { background-color: #ef4444; }
         
         #result-container { text-align: left; background: #282c34; color: #abb2bf; padding: 15px; border-radius: 8px; overflow-x: auto; height: 200px; margin-top: 20px; font-size: 14px; }
         .log-info { margin: 10px 0; color: #666; font-size: 14px;}
@@ -59,7 +59,7 @@
 <body>
 
 <div class="container">
-    <h1>🐲 奶龍偵察器 V3</h1>
+    <h1>🐲 奶龍偵察器</h1>
     
     <div id="detection-status">狀態：等待開始...</div>
 
@@ -96,7 +96,7 @@
     const API_KEY = "s1Lu70khq7Ymo6iCuiFw";
     const API_URL = "https://serverless.roboflow.com/harrys-workspace-wrtc8/workflows/custom-workflow";
 
-    let isDetecting = false; // 控制是否正在進行偵測的開關
+    let isDetecting = false;
 
     // 1. 初始化鏡頭
     async function initWebcam() {
@@ -117,11 +117,9 @@
     }
 
     function resizeCanvas() {
-        // 使用影片的原始比例來設定畫布大小，確保繪圖精準度
         overlayCanvas.width = video.videoWidth;
         overlayCanvas.height = video.videoHeight;
         
-        // 為了讓 CSS 縮放不影響畫布，我們設定畫布的 style width/height 與視訊相同
         overlayCanvas.style.width = video.clientWidth + 'px';
         overlayCanvas.style.height = video.clientHeight + 'px';
     }
@@ -130,12 +128,12 @@
     function updateStatusUI(predictions) {
         if (predictions && predictions.length > 0) {
             detectionStatus.innerText = `🟢 發現目標！偵測到 ${predictions.length} 個物件`;
-            detectionStatus.style.backgroundColor = '#d1fae5'; // 淺綠色背景
-            detectionStatus.style.color = '#065f46'; // 深綠色文字
+            detectionStatus.style.backgroundColor = '#d1fae5';
+            detectionStatus.style.color = '#065f46';
         } else {
             detectionStatus.innerText = `🔴 畫面中沒有偵測到目標`;
-            detectionStatus.style.backgroundColor = '#fee2e2'; // 淺紅色背景
-            detectionStatus.style.color = '#991b1b'; // 深紅色文字
+            detectionStatus.style.backgroundColor = '#fee2e2';
+            detectionStatus.style.color = '#991b1b';
         }
     }
 
@@ -146,7 +144,6 @@
         if (!predictions || predictions.length === 0) return;
 
         predictions.forEach(pred => {
-            // 因為現在畫布大小直接等於 video 原始大小，所以不需額外算比例
             const width = pred.width;
             const height = pred.height;
             const x = pred.x - width / 2;
@@ -157,7 +154,7 @@
 
             // 繪製框
             overlayCtx.strokeStyle = "#00FF00";
-            overlayCtx.lineWidth = Math.max(2, overlayCanvas.width / 150); // 根據解析度動態調整線條粗細
+            overlayCtx.lineWidth = Math.max(2, overlayCanvas.width / 150);
             overlayCtx.strokeRect(x, y, width, height);
 
             // 繪製文字
@@ -173,7 +170,7 @@
 
     // 4. 執行單次辨識的函數
     async function performDetection() {
-        if (!isDetecting) return; // 如果已經按下停止，就中斷執行
+        if (!isDetecting) return;
 
         logDiv.innerText = `最後更新時間：${new Date().toLocaleTimeString()} ...`;
 
@@ -197,56 +194,62 @@
             const result = await response.json();
             resultContainer.innerText = JSON.stringify(result, null, 2);
 
+            // --- 強化版 JSON 解析邏輯 ---
             let predictions = [];
-            if (result.output && result.output.predictions) {
-                predictions = result.output.predictions;
+            
+            if (result.outputs && result.outputs.predictions) {
+                predictions = result.outputs.predictions;
             } else if (result.predictions) {
                 predictions = result.predictions;
+            } else if (result.output && result.output.predictions) {
+                predictions = result.output.predictions;
+            } else if (Array.isArray(result) && result.length > 0) {
+                if (result[0].predictions) {
+                    predictions = result[0].predictions;
+                } else if (result[0].outputs && result[0].outputs.predictions) {
+                    predictions = result[0].outputs.predictions;
+                }
             }
+            // --------------------------------
 
             drawResults(predictions);
-            updateStatusUI(predictions); // 更新最上方的狀態列
+            updateStatusUI(predictions);
 
         } catch (error) {
             console.error("API 請求失敗:", error);
             logDiv.innerText = "請求失敗: " + error.message;
         }
 
-        // 核心邏輯：如果還在偵測狀態，等待 0.5 秒 (500 毫秒) 後再次執行
         if (isDetecting) {
             setTimeout(performDetection, 500);
         }
     }
 
-    // 5. 按鈕切換邏輯 (開始 / 停止)
+    // 5. 按鈕切換邏輯
     toggleBtn.addEventListener('click', () => {
         if (isDetecting) {
-            // 停止偵測
             isDetecting = false;
             toggleBtn.innerText = "開始即時辨認";
             toggleBtn.classList.remove("stop-btn");
             logDiv.innerText = "偵測已停止。";
             
-            // 恢復初始狀態
             detectionStatus.innerText = "狀態：已停止";
             detectionStatus.style.backgroundColor = "#e5e7eb";
             detectionStatus.style.color = "#374151";
             overlayCtx.clearRect(0, 0, overlayCanvas.width, overlayCanvas.height);
         } else {
-            // 開始偵測
             isDetecting = true;
             toggleBtn.innerText = "停止辨認";
             toggleBtn.classList.add("stop-btn");
             logDiv.innerText = "開始連線 API...";
             detectionStatus.innerText = "🟡 正在進行第一次辨識...";
-            detectionStatus.style.backgroundColor = "#fef08a"; // 黃色準備狀態
+            detectionStatus.style.backgroundColor = "#fef08a";
             detectionStatus.style.color = "#854d0e";
             
-            performDetection(); // 啟動迴圈
+            performDetection();
         }
     });
 
-    // 啟動鏡頭
     initWebcam();
 </script>
 
