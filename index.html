@@ -83,6 +83,13 @@
             color: #333;
         }
 
+        .summary-box {
+            background-color: #e8f8f5;
+            border: 1px solid #a3e4d7;
+            border-radius: 8px;
+            padding: 15px;
+        }
+
         @media (max-width: 768px) {
             .main-container {
                 margin: 10px;
@@ -187,7 +194,7 @@
 
         <div class="controls-box mt-5">
             <h3 class="text-center mb-4 fw-bold"><i class="bi bi-box-seam"></i> 教材安排提示</h3>
-            <div class="row g-3 text-start">
+            <div class="row g-3 text-start mb-4">
                 <div class="col-md-4">
                     <label class="form-label fw-bold">日期 (以週計算)</label>
                     <select id="matWeekSelect" class="form-select"></select>
@@ -205,8 +212,14 @@
                     </select>
                 </div>
             </div>
+
+            <div id="materialSummaryBox" class="summary-box mb-4" style="display: none;">
+                <h5 class="fw-bold text-success mb-3"><i class="bi bi-clipboard-check"></i> 本週教材總結</h5>
+                <div id="sendSummaryText" class="mb-2 text-dark"></div>
+                <div id="collectSummaryText" class="text-dark"></div>
+            </div>
             
-            <div class="row mt-4">
+            <div class="row">
                 <div class="col-md-6">
                     <h5 class="fw-bold text-success mb-3"><i class="bi bi-arrow-right-circle"></i> 送出教材</h5>
                     <div id="sendMaterialList" class="list-group"></div>
@@ -292,7 +305,6 @@
                         
                         let date = parseDate(col[3]);
                         
-                        // 擷取所有需要的欄位，包括 M (12) 與 N (13)
                         rawSheetData.push({
                             A: (col[0] || '').trim(),
                             C: (col[2] || '').trim(),
@@ -338,7 +350,6 @@
                     refreshCalendar();
                     document.getElementById('loading').style.display = 'none';
 
-                    // 初始化新功能：教材安排提示
                     initMaterialSection(tutorSet, schoolSetForDisplay);
                 }
             });
@@ -476,7 +487,6 @@
         // ======== 教材安排提示功能區塊 ========
 
         function initMaterialSection(tutorSet, schoolSet) {
-            // 填充學校下拉選單
             const schoolSelect = document.getElementById('matSchoolSelect');
             Array.from(schoolSet).sort().forEach(school => {
                 if(school) {
@@ -486,7 +496,6 @@
                 }
             });
 
-            // 填充導師下拉選單
             const tutorSelect = document.getElementById('matTutorSelect');
             const tutors = Array.from(tutorSet).sort((a, b) => {
                 let indexA = PRIORITY_TUTORS.indexOf(a);
@@ -502,15 +511,12 @@
                 tutorSelect.appendChild(opt);
             });
 
-            // 產生並填充週次下拉選單
             generateWeeks();
 
-            // 綁定事件監聽
             document.getElementById('matWeekSelect').addEventListener('change', updateMaterialPrompt);
             document.getElementById('matSchoolSelect').addEventListener('change', updateMaterialPrompt);
             document.getElementById('matTutorSelect').addEventListener('change', updateMaterialPrompt);
 
-            // 初次載入渲染
             updateMaterialPrompt();
         }
 
@@ -526,11 +532,9 @@
             let minDate = new Date(minDateStr);
             let maxDate = new Date(maxDateStr);
 
-            // 取得最早日期的該週星期日
             let startSunday = new Date(minDate);
             startSunday.setDate(startSunday.getDate() - startSunday.getDay());
 
-            // 取得最晚日期的該週星期六
             let endSaturday = new Date(maxDate);
             endSaturday.setDate(endSaturday.getDate() + (6 - endSaturday.getDay()));
 
@@ -550,21 +554,17 @@
                 opt.value = val;
                 opt.text = `${startStr} ~ ${endStr}`;
 
-                // 若今日落在該週區間內，則記為預設選取值
                 if (todayStr >= startStr && todayStr <= endStr) {
                     selectedValue = val;
                 }
 
                 select.appendChild(opt);
-                
-                // 推進到下一週
                 currentSunday.setDate(currentSunday.getDate() + 7);
             }
 
             if (selectedValue) {
                 select.value = selectedValue;
             } else if (select.options.length > 0) {
-                // 如果今天不在所有日期的範圍內，預設選取最後一週
                 select.selectedIndex = select.options.length - 1;
             }
         }
@@ -581,6 +581,10 @@
             const sendList = document.getElementById('sendMaterialList');
             const collectList = document.getElementById('collectMaterialList');
             
+            const summaryBox = document.getElementById('materialSummaryBox');
+            const sendSumDiv = document.getElementById('sendSummaryText');
+            const collectSumDiv = document.getElementById('collectSummaryText');
+
             sendList.innerHTML = '';
             collectList.innerHTML = '';
 
@@ -588,7 +592,6 @@
 
             const [weekStartStr, weekEndStr] = weekVal.split('|');
             
-            // 透過「學校(A) + 教材(M)」來將資料分群
             let groups = {};
             rawSheetData.forEach(r => {
                 if (!r.A || !r.M || !r.parsedDate) return; 
@@ -605,16 +608,13 @@
 
             for (let key in groups) {
                 let rows = groups[key];
-                // 依日期排序，確保能準確抓到該教材在該校的第一堂與最後一堂
                 rows.sort((a, b) => a.parsedDate.localeCompare(b.parsedDate));
 
                 let firstRow = rows[0];
                 let lastRow = rows[rows.length - 1];
 
-                // 判斷第一日是否落在選定週次 (送出教材)
                 if (firstRow.parsedDate >= weekStartStr && firstRow.parsedDate <= weekEndStr) {
                     let matchSchool = (schoolVal === 'all' || firstRow.A === schoolVal);
-                    // 處理導師用 '/' 分隔的情況
                     let tutors = firstRow.G ? firstRow.G.split('/').map(t => t.trim()) : [];
                     let matchTutor = (tutorVal === 'all' || tutors.includes(tutorVal));
                     
@@ -623,10 +623,8 @@
                     }
                 }
 
-                // 判斷最後一日是否落在選定週次 (回收教材)
                 if (lastRow.parsedDate >= weekStartStr && lastRow.parsedDate <= weekEndStr) {
                     let matchSchool = (schoolVal === 'all' || lastRow.A === schoolVal);
-                    // 處理導師用 '/' 分隔的情況
                     let tutors = lastRow.G ? lastRow.G.split('/').map(t => t.trim()) : [];
                     let matchTutor = (tutorVal === 'all' || tutors.includes(tutorVal));
                     
@@ -636,7 +634,47 @@
                 }
             }
 
-            // 渲染送出教材列表
+            // --- 總結計算邏輯 ---
+            let sendSummary = {};
+            sends.forEach(r => {
+                let m = r.M;
+                // 用 parseFloat 抓取數字，若填寫 "15包" 會抓到 15。若沒填或無法轉換則為 0
+                let num = parseFloat(r.N) || 0;
+                sendSummary[m] = (sendSummary[m] || 0) + num;
+            });
+
+            let collectSummary = {};
+            collects.forEach(r => {
+                let m = r.M;
+                let num = parseFloat(r.N) || 0;
+                collectSummary[m] = (collectSummary[m] || 0) + num;
+            });
+
+            // --- 渲染總結區塊 ---
+            let sendKeys = Object.keys(sendSummary);
+            let collectKeys = Object.keys(collectSummary);
+
+            if (sendKeys.length === 0 && collectKeys.length === 0) {
+                summaryBox.style.display = 'none';
+            } else {
+                summaryBox.style.display = 'block';
+                
+                if (sendKeys.length > 0) {
+                    let sText = sendKeys.map(m => `${m}（${sendSummary[m]}個）`).join('、');
+                    sendSumDiv.innerHTML = `<strong>需準備送出：</strong> ${sText}`;
+                } else {
+                    sendSumDiv.innerHTML = `<strong>需準備送出：</strong> 無`;
+                }
+
+                if (collectKeys.length > 0) {
+                    let cText = collectKeys.map(m => `${m}（${collectSummary[m]}個）`).join('、');
+                    collectSumDiv.innerHTML = `<strong>預期可回收：</strong> ${cText}`;
+                } else {
+                    collectSumDiv.innerHTML = `<strong>預期可回收：</strong> 無`;
+                }
+            }
+
+            // --- 渲染列表 ---
             if (sends.length === 0) {
                 sendList.innerHTML = '<div class="list-group-item text-muted">本週無送出教材</div>';
             } else {
@@ -648,7 +686,6 @@
                 });
             }
 
-            // 渲染回收教材列表
             if (collects.length === 0) {
                 collectList.innerHTML = '<div class="list-group-item text-muted">本週無回收教材</div>';
             } else {
