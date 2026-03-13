@@ -16,9 +16,9 @@
         .file-btn { width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: 0.2s; }
         .file-btn.attached { background-color: #198754; color: white; border-color: #198754; }
         
-        /* 預覽編號的自訂樣式 (參考你提供的截圖) */
+        /* 預覽編號樣式 */
         .preview-badge {
-            background-color: #62c5e5; /* 淺藍色 */
+            background-color: #62c5e5;
             color: #212529;
             font-weight: 700;
             border-radius: 6px;
@@ -26,17 +26,17 @@
             text-align: center;
             width: 100%;
             display: inline-block;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            transition: 0.3s;
         }
 
-        /* 欄位寬度設定 */
         .col-file { min-width: 110px; }
         .col-user { min-width: 120px; }
         .col-cat { min-width: 130px; }
         .col-type { min-width: 120px; }
         .col-date { min-width: 130px; }
         .col-amount { min-width: 110px; }
-        .col-preview { min-width: 100px; } /* 新增預覽編號寬度 */
+        .col-preview { min-width: 110px; } 
         .col-name { min-width: 150px; }
         .col-action { min-width: 50px; text-align: center; }
         
@@ -68,7 +68,8 @@
                             <th class="col-type">Type</th>
                             <th class="col-date">Date</th>
                             <th class="col-amount">Amount</th>
-                            <th class="col-preview">預覽編號</th> <th class="col-name">Item Name</th>
+                            <th class="col-preview">預覽編號</th>
+                            <th class="col-name">Item Name</th>
                             <th class="col-action">刪除</th>
                         </tr>
                     </thead>
@@ -90,11 +91,53 @@
 
 <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx8hdxwUDSs6z75MawUTU1qb70PyrY6WvLkGGIPAfAdPjggSdchWvYjugBsDR7VOiCMCg/exec";
+    
     let itemCount = 0;
     const MAX_ITEMS = 10;
     let rowIdCounter = 0;
+    
+    // 用來儲存從 Google Sheet 抓回來的最新編號
+    let baseId = 0; 
+    let isIdFetched = false;
 
-    document.addEventListener("DOMContentLoaded", () => { addRow(); });
+    document.addEventListener("DOMContentLoaded", () => { 
+        addRow(); 
+        fetchLatestId(); // 網頁載入時立刻去抓最新編號
+    });
+
+    // 抓取雲端最新編號
+    async function fetchLatestId() {
+        try {
+            const response = await fetch(SCRIPT_URL);
+            const data = await response.json();
+            baseId = data.latest_id || 0;
+            isIdFetched = true;
+            updateAllPreviewIds(); // 抓到後更新畫面上所有編號
+        } catch (error) {
+            console.error("無法取得最新編號:", error);
+            // 失敗時給個預設值，避免卡住
+            baseId = 0; 
+            isIdFetched = true;
+            updateAllPreviewIds();
+        }
+    }
+
+    // 更新畫面上所有的預覽編號 (確保順序正確)
+    function updateAllPreviewIds() {
+        if (!isIdFetched) return; // 還沒抓到資料前不更新
+
+        const rows = document.querySelectorAll('#itemsContainer tr');
+        rows.forEach((row, index) => {
+            const badge = row.querySelector('.preview-badge');
+            if (badge) {
+                // 計算當前行的編號 (雲端最新編號 + 畫面上第幾行)
+                const currentId = baseId + index + 1;
+                // 格式化為 RED-001, RED-012 格式
+                const formattedId = "RED-" + String(currentId).padStart(3, '0');
+                badge.innerText = formattedId;
+            }
+        });
+    }
 
     function addRow() {
         if (itemCount >= MAX_ITEMS) return;
@@ -114,12 +157,8 @@
                     <input type="file" class="file-input" accept="image/*,application/pdf" style="display: none;">
                 </label>
             </td>
-            <td>
-                <input type="text" class="form-control form-control-sm who-pay-input" value="Harry Use" readonly tabindex="-1">
-            </td>
-            <td>
-                <input type="text" class="form-control form-control-sm category-input" value="Harry Personal" readonly tabindex="-1">
-            </td>
+            <td><input type="text" class="form-control form-control-sm who-pay-input" value="Harry Use" readonly tabindex="-1"></td>
+            <td><input type="text" class="form-control form-control-sm category-input" value="Harry Personal" readonly tabindex="-1"></td>
             <td>
                 <select class="form-select form-select-sm type-input" required>
                     <option value="Dinning" selected>Dinning</option>
@@ -127,18 +166,12 @@
                     <option value="Admin">Admin</option>
                 </select>
             </td>
-            <td>
-                <input type="date" class="form-control form-control-sm date-input" value="${defaultDate}" required>
-            </td>
-            <td>
-                <input type="number" step="0.01" class="form-control form-control-sm amount-input" placeholder="0.00" required>
-            </td>
+            <td><input type="date" class="form-control form-control-sm date-input" value="${defaultDate}" required></td>
+            <td><input type="number" step="0.01" class="form-control form-control-sm amount-input" placeholder="0.00" required></td>
             <td class="align-middle">
-                <div class="preview-badge">#${rowIdCounter}</div>
+                <div class="preview-badge">${isIdFetched ? '' : '⏳ 讀取中'}</div>
             </td>
-            <td>
-                <input type="text" class="form-control form-control-sm name-input" value="-" required>
-            </td>
+            <td><input type="text" class="form-control form-control-sm name-input" value="-" required></td>
             <td class="col-action align-middle">
                 ${itemCount > 1 ? `<button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeRow('${rowId}')">❌</button>` : ''}
             </td>
@@ -146,6 +179,9 @@
         tbody.appendChild(tr);
         updateAddButton();
         calculateTotal();
+        
+        // 每次新增行都要重算一次編號
+        updateAllPreviewIds();
     }
 
     function removeRow(rowId) {
@@ -153,6 +189,9 @@
         itemCount--; 
         updateAddButton(); 
         calculateTotal();
+        
+        // 刪除行後也要重新整理編號順序，確保不會跳號
+        updateAllPreviewIds();
     }
 
     function updateAddButton() {
