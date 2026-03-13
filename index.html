@@ -9,34 +9,26 @@
         body { background-color: #f8f9fa; padding: 10px; font-family: -apple-system, sans-serif; }
         .card-main { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: #fff; padding: 15px; }
         .header-title { color: #dc3545; font-weight: 800; text-align: center; margin-bottom: 15px; font-size: 1.5rem; }
+        
+        /* Table Matrix specific styles */
         .table-responsive { border-radius: 8px; border: 1px solid #dee2e6; margin-bottom: 15px; }
         .table { margin-bottom: 0; white-space: nowrap; font-size: 0.9rem; }
         .table th { background-color: #f1f3f5; font-weight: bold; color: #495057; text-align: center; }
         .table td { vertical-align: middle; padding: 8px; }
+        .table tfoot th { background-color: #e9ecef; }
+        
+        /* Compact File Button */
         .file-btn { width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: 0.2s; }
         .file-btn.attached { background-color: #198754; color: white; border-color: #198754; }
         
-        /* 預覽編號樣式 */
-        .preview-badge {
-            background-color: #62c5e5;
-            color: #212529;
-            font-weight: 700;
-            border-radius: 6px;
-            padding: 4px 0;
-            text-align: center;
-            width: 100%;
-            display: inline-block;
-            font-size: 0.85rem;
-            transition: 0.3s;
-        }
-
+        /* Set minimum widths so columns don't crush on mobile */
         .col-file { min-width: 110px; }
         .col-user { min-width: 120px; }
         .col-cat { min-width: 130px; }
         .col-type { min-width: 120px; }
         .col-date { min-width: 130px; }
         .col-amount { min-width: 110px; }
-        .col-preview { min-width: 110px; } 
+        .col-id { min-width: 110px; text-align: center; } /* 編號欄位寬度 */
         .col-name { min-width: 150px; }
         .col-action { min-width: 50px; text-align: center; }
         
@@ -51,6 +43,7 @@
     <h1 class="header-title">Red 4.0 (Personal)</h1>
     <div class="card-main">
         <form id="mainForm">
+            
             <div class="batch-header">
                 <h5 class="mb-0 fw-bold fs-6">🧾 批量單據 (Personal)</h5>
                 <button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="addBtn" onclick="addRow()">+ 新增行 (1/10)</button>
@@ -68,16 +61,19 @@
                             <th class="col-type">Type</th>
                             <th class="col-date">Date</th>
                             <th class="col-amount">Amount</th>
-                            <th class="col-preview">預覽編號</th>
+                            <th class="col-id">預覽編號</th>
                             <th class="col-name">Item Name</th>
                             <th class="col-action">刪除</th>
                         </tr>
                     </thead>
-                    <tbody id="itemsContainer"></tbody>
+                    <tbody id="itemsContainer">
+                    </tbody>
                     <tfoot>
                         <tr>
                             <th colspan="5" class="text-end align-middle fs-6">總金額 (Total):</th>
-                            <th class="text-danger fs-6 fw-bold align-middle">$<span id="totalAmount">0.00</span></th>
+                            <th class="text-danger fs-6 fw-bold align-middle">
+                                $<span id="totalAmount">0.00</span>
+                            </th>
                             <th colspan="3"></th>
                         </tr>
                     </tfoot>
@@ -91,56 +87,73 @@
 
 <script>
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx8hdxwUDSs6z75MawUTU1qb70PyrY6WvLkGGIPAfAdPjggSdchWvYjugBsDR7VOiCMCg/exec";
-    
     let itemCount = 0;
     const MAX_ITEMS = 10;
     let rowIdCounter = 0;
     
-    // 用來儲存從 Google Sheet 抓回來的最新編號
-    let baseId = 0; 
-    let isIdFetched = false;
+    // 儲存從 Google Sheet 獲取的基礎編號 (簡化版固定使用工作表1)
+    let baseSheetId = null;
 
+    // Initialize first row on load & Fetch IDs
     document.addEventListener("DOMContentLoaded", () => { 
         addRow(); 
-        fetchLatestId(); // 網頁載入時立刻去抓最新編號
+        fetchBaseId();
     });
 
-    // 抓取雲端最新編號
-    async function fetchLatestId() {
+    // 異步獲取工作表1的最新編號
+    async function fetchBaseId() {
         try {
-            const response = await fetch(SCRIPT_URL);
-            const data = await response.json();
-            baseId = data.latest_id || 0;
-            isIdFetched = true;
-            updateAllPreviewIds(); // 抓到後更新畫面上所有編號
+            const res = await fetch(`${SCRIPT_URL}?action=getCount&sheetName=${encodeURIComponent('工作表1')}`);
+            const data = await res.json();
+            
+            baseSheetId = data.nextId;
+            recalculateIds(); // 獲取完成後更新所有行的編號
         } catch (error) {
-            console.error("無法取得最新編號:", error);
-            // 失敗時給個預設值，避免卡住
-            baseId = 0; 
-            isIdFetched = true;
-            updateAllPreviewIds();
+            console.error("無法獲取編號:", error);
+            document.querySelectorAll('.id-preview').forEach(el => el.innerText = "Error");
         }
     }
 
-    // 更新畫面上所有的預覽編號 (確保順序正確)
-    function updateAllPreviewIds() {
-        if (!isIdFetched) return; // 還沒抓到資料前不更新
+    // 智能推算下一個編號 (支援結尾是數字的字串)
+    function incrementIdStr(idStr, addAmount) {
+        if (!idStr) return "--";
+        if (addAmount === 0) return idStr;
+        let match = idStr.toString().match(/^(.*?)(\d+)$/);
+        if (match) {
+            let prefix = match[1];
+            let numStr = match[2];
+            let num = parseInt(numStr, 10) + addAmount;
+            let newNumStr = num.toString().padStart(numStr.length, '0');
+            return prefix + newNumStr;
+        }
+        return idStr + "(+" + addAmount + ")";
+    }
 
+    // 重新計算清單中所有預覽編號
+    function recalculateIds() {
+        let counter = 0;
         const rows = document.querySelectorAll('#itemsContainer tr');
-        rows.forEach((row, index) => {
-            const badge = row.querySelector('.preview-badge');
-            if (badge) {
-                // 計算當前行的編號 (雲端最新編號 + 畫面上第幾行)
-                const currentId = baseId + index + 1;
-                // 格式化為 RED-001, RED-012 格式
-                const formattedId = "RED-" + String(currentId).padStart(3, '0');
-                badge.innerText = formattedId;
+        
+        rows.forEach(row => {
+            const badge = row.querySelector('.id-preview');
+            
+            if (baseSheetId === null) {
+                badge.innerText = "讀取中...";
+                badge.className = "badge bg-warning text-dark id-preview w-100 py-2";
+            } else {
+                const currentId = incrementIdStr(baseSheetId, counter);
+                badge.innerText = currentId;
+                badge.className = "badge bg-info text-dark id-preview w-100 py-2";
+                counter++; // 為下一行加 1
             }
         });
     }
 
     function addRow() {
-        if (itemCount >= MAX_ITEMS) return;
+        if (itemCount >= MAX_ITEMS) {
+            alert(`最多只能新增 ${MAX_ITEMS} 筆！`);
+            return;
+        }
         
         itemCount++;
         rowIdCounter++;
@@ -152,13 +165,17 @@
         tr.id = rowId;
         tr.innerHTML = `
             <td>
-                <label class="btn btn-sm btn-outline-primary file-btn mb-0 w-100">
+                <label class="btn btn-sm btn-outline-primary file-btn mb-0 w-100" title="點擊上傳相片或 PDF">
                     <span class="file-icon">📎</span> <span class="file-text">Attach</span>
                     <input type="file" class="file-input" accept="image/*,application/pdf" style="display: none;">
                 </label>
             </td>
-            <td><input type="text" class="form-control form-control-sm who-pay-input" value="Harry Use" readonly tabindex="-1"></td>
-            <td><input type="text" class="form-control form-control-sm category-input" value="Harry Personal" readonly tabindex="-1"></td>
+            <td>
+                <input type="text" class="form-control form-control-sm who-pay-input" value="Harry Use" readonly tabindex="-1">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm category-input" value="Harry Personal" readonly tabindex="-1">
+            </td>
             <td>
                 <select class="form-select form-select-sm type-input" required>
                     <option value="Dinning" selected>Dinning</option>
@@ -166,12 +183,18 @@
                     <option value="Admin">Admin</option>
                 </select>
             </td>
-            <td><input type="date" class="form-control form-control-sm date-input" value="${defaultDate}" required></td>
-            <td><input type="number" step="0.01" class="form-control form-control-sm amount-input" placeholder="0.00" required></td>
-            <td class="align-middle">
-                <div class="preview-badge">${isIdFetched ? '' : '⏳ 讀取中'}</div>
+            <td>
+                <input type="date" class="form-control form-control-sm date-input" value="${defaultDate}" required>
             </td>
-            <td><input type="text" class="form-control form-control-sm name-input" value="-" required></td>
+            <td>
+                <input type="number" step="0.01" class="form-control form-control-sm amount-input" placeholder="0.00" required>
+            </td>
+            <td class="text-center align-middle">
+                <span class="badge bg-warning text-dark id-preview w-100 py-2">讀取中...</span>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm name-input" placeholder="名稱" value="-" required>
+            </td>
             <td class="col-action align-middle">
                 ${itemCount > 1 ? `<button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeRow('${rowId}')">❌</button>` : ''}
             </td>
@@ -179,19 +202,18 @@
         tbody.appendChild(tr);
         updateAddButton();
         calculateTotal();
-        
-        // 每次新增行都要重算一次編號
-        updateAllPreviewIds();
+        recalculateIds(); // 新增行時重新推算編號
     }
 
     function removeRow(rowId) {
-        document.getElementById(rowId).remove(); 
-        itemCount--; 
-        updateAddButton(); 
-        calculateTotal();
-        
-        // 刪除行後也要重新整理編號順序，確保不會跳號
-        updateAllPreviewIds();
+        const row = document.getElementById(rowId);
+        if (row) { 
+            row.remove(); 
+            itemCount--; 
+            updateAddButton(); 
+            calculateTotal(); 
+            recalculateIds(); // 移除行時重新推算編號，確保序號連續
+        }
     }
 
     function updateAddButton() {
@@ -202,31 +224,49 @@
 
     function calculateTotal() {
         let total = 0;
-        document.querySelectorAll('.amount-input').forEach(input => {
+        const amountInputs = document.querySelectorAll('.amount-input');
+        amountInputs.forEach(input => {
             const val = parseFloat(input.value);
-            if (!isNaN(val)) total += val;
+            if (!isNaN(val)) {
+                total += val;
+            }
         });
         document.getElementById('totalAmount').innerText = total.toFixed(2);
     }
 
+    // Handle File Selection
     document.getElementById('itemsContainer').addEventListener('change', function(e) {
         const row = e.target.closest('tr');
+        if (!row) return;
+
         if (e.target.classList.contains('file-input')) {
             const file = e.target.files[0];
             const labelBtn = row.querySelector('.file-btn');
             const fileText = row.querySelector('.file-text');
             const fileIcon = row.querySelector('.file-icon');
+
             if (file) {
-                row.fileData = file;
-                labelBtn.classList.replace('btn-outline-primary', 'attached');
+                row.fileData = file; 
+                labelBtn.classList.add('attached');
+                labelBtn.classList.remove('btn-outline-primary');
                 fileIcon.innerText = "✅";
-                fileText.innerText = file.name.length > 8 ? file.name.substring(0, 8) + '...' : file.name;
+                let shortName = file.name;
+                if (shortName.length > 8) shortName = shortName.substring(0, 8) + '...';
+                fileText.innerText = shortName;
+            } else {
+                row.fileData = null;
+                labelBtn.classList.remove('attached');
+                labelBtn.classList.add('btn-outline-primary');
+                fileIcon.innerText = "📎";
+                fileText.innerText = "Attach";
             }
         }
     });
 
-    document.getElementById('itemsContainer').addEventListener('input', (e) => {
-        if (e.target.classList.contains('amount-input')) calculateTotal();
+    document.getElementById('itemsContainer').addEventListener('input', function(e) {
+        if (e.target.classList.contains('amount-input')) {
+            calculateTotal();
+        }
     });
 
     function getBase64(file) {
@@ -238,42 +278,73 @@
         });
     }
 
+    // Submit Form Data
     document.getElementById('mainForm').onsubmit = async (e) => {
         e.preventDefault();
+        
         const itemRows = document.querySelectorAll('#itemsContainer tr');
-        const btn = document.getElementById('submitBtn');
-        btn.disabled = true;
+        const itemsToSubmit = [];
 
         for (let i = 0; i < itemRows.length; i++) {
             const row = itemRows[i];
-            if (!row.fileData) {
-                alert(`第 ${i+1} 行尚未上傳附件！`);
-                btn.disabled = false;
-                return;
+            const file = row.fileData;
+            
+            if (!file) {
+                alert(`第 ${i+1} 行尚未上傳附件！請點擊 📎 Attach 上傳。`);
+                return; 
             }
 
-            btn.innerText = `⏳ 傳送中... (${i + 1}/${itemRows.length})`;
+            itemsToSubmit.push({
+                file: file,
+                whoPay: "Harry Use",
+                category: "Harry Personal",
+                sheetName: "工作表1",
+                type: row.querySelector('.type-input').value,
+                date: row.querySelector('.date-input').value,
+                amount: row.querySelector('.amount-input').value,
+                itemName: row.querySelector('.name-input').value
+            });
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        let successCount = 0;
+
+        for (let i = 0; i < itemsToSubmit.length; i++) {
+            btn.innerText = `⏳ 傳送中... (${i + 1}/${itemsToSubmit.length})`;
+            const item = itemsToSubmit[i];
+            
             try {
-                const base64File = await getBase64(row.fileData);
+                const base64File = await getBase64(item.file);
                 const payload = {
-                    whoPay: "Harry Use",
-                    category: "Harry Personal",
-                    sheetName: "工作表1",
+                    whoPay: item.whoPay,
+                    category: item.category,
+                    sheetName: item.sheetName,
                     image: base64File,
-                    mimeType: row.fileData.type,
-                    type: row.querySelector('.type-input').value,
-                    date: row.querySelector('.date-input').value,
-                    itemName: row.querySelector('.name-input').value,
-                    amount: row.querySelector('.amount-input').value
+                    mimeType: item.file.type,
+                    type: item.type,
+                    date: item.date,
+                    itemName: item.itemName,
+                    amount: item.amount
                 };
-                await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+
+                await fetch(SCRIPT_URL, { 
+                    method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) 
+                });
+                successCount++;
             } catch (err) {
-                console.error(err);
+                console.error(`第 ${i + 1} 筆上傳失敗:`, err);
             }
         }
 
-        alert(`✅ 成功上傳所有資料！`);
-        location.reload();
+        if (successCount === itemsToSubmit.length) {
+            alert(`✅ 成功上傳 ${successCount} 筆資料！\n總金額：$${document.getElementById('totalAmount').innerText}`);
+            location.reload();
+        } else {
+            alert(`⚠️ 上傳完成，但有 ${itemsToSubmit.length - successCount} 筆失敗，請檢查網路連線。`);
+            btn.disabled = false;
+            btn.innerText = "重新傳送失敗項目";
+        }
     };
 </script>
 </body>
