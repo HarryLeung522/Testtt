@@ -1,702 +1,395 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-HK">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>派克教班日期</title>
-    
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
-    
-    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.8/index.global.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Red 4.0 - 批量上傳系統</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        :root {
-            --primary-color: #2c3e50; 
-            --bg-light: #f4f7f6;      
-            --card-border: #d6eaf8;   
-        }
-
-        body {
-            font-family: "Microsoft JhengHei", sans-serif;
-            background-color: var(--bg-light);
-            color: var(--primary-color);
-        }
-
-        .main-container {
-            max-width: 1200px;
-            margin: 30px auto;
-            background: white;
-            padding: 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-        }
-
-        .controls-box {
-            background: #ebf5fb;
-            padding: 20px;
-            border-radius: 10px;
-            border: 1px solid var(--card-border);
-            margin-bottom: 25px;
-        }
-
-        a { text-decoration: none !important; }
-        .fc-col-header-cell-cushion, .fc-daygrid-day-number, .fc-list-day-text, .fc-list-day-side-text {
-            text-decoration: none !important;
-            color: var(--primary-color) !important;
-        }
-
-        .fc .fc-button-primary {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
+        body { background-color: #f8f9fa; padding: 10px; font-family: -apple-system, sans-serif; }
+        .card-main { border-radius: 12px; border: none; box-shadow: 0 4px 12px rgba(0,0,0,0.1); background: #fff; padding: 15px; }
+        .header-title { color: #dc3545; font-weight: 800; text-align: center; margin-bottom: 15px; font-size: 1.5rem; }
         
-        .fc-event {
-            cursor: pointer;
-            border: none;
-            background-color: #ffffff !important;
-            color: #333 !important;
-            padding: 2px 5px;
-            margin-bottom: 2px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            border-radius: 4px;
-        }
-
-        .tutor-border-default { border-left: 5px solid #3498db !important; } 
-        .tutor-border-harry { border-left: 5px solid #f39c12 !important; }   
-        .tutor-border-zoe { border-left: 5px solid #27ae60 !important; }     
-        .tutor-border-ian { border-left: 5px solid #e74c3c !important; }     
-        .tutor-border-chris { border-left: 5px solid #8e44ad !important; }   
-
-        .event-time { font-weight: 700; color: #444; }
-        .event-tutor { font-size: 0.85em; color: #666; font-style: italic; }
-
-        .fc-daygrid-day-events {
-            padding-bottom: 10px !important;
-        }
-
-        #loading { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255,255,255,0.95); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; }
+        /* Table Matrix specific styles */
+        .table-responsive { border-radius: 8px; border: 1px solid #dee2e6; margin-bottom: 15px; }
+        .table { margin-bottom: 0; white-space: nowrap; font-size: 0.9rem; }
+        .table th { background-color: #f1f3f5; font-weight: bold; color: #495057; text-align: center; }
+        .table td { vertical-align: middle; padding: 8px; }
+        .table tfoot th { background-color: #e9ecef; }
         
-        .detail-item {
-            font-size: 0.95rem;
-            color: #333;
-        }
-
-        .summary-box {
-            background-color: #e8f8f5;
-            border: 1px solid #a3e4d7;
-            border-radius: 8px;
-            padding: 15px;
-        }
-
-        @media (max-width: 768px) {
-            .main-container {
-                margin: 10px;
-                padding: 15px;
-            }
-            .controls-box {
-                padding: 15px;
-            }
-            .fc-header-toolbar {
-                flex-wrap: wrap;
-                gap: 10px;
-                justify-content: center !important;
-            }
-            .fc-toolbar-chunk {
-                text-align: center;
-            }
-            .fc .fc-toolbar-title {
-                font-size: 1.25rem !important;
-            }
-            .event-time { font-size: 0.8em; }
-            .event-tutor { font-size: 0.75em; }
-            .fc-event .small { font-size: 0.75em; }
-        }
+        /* Compact File Button */
+        .file-btn { width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; transition: 0.2s; }
+        .file-btn.attached { background-color: #198754; color: white; border-color: #198754; }
+        
+        /* Set minimum widths so columns don't crush on mobile */
+        .col-file { min-width: 110px; }
+        .col-whopay { min-width: 140px; }
+        .col-cat { min-width: 150px; }
+        .col-type { min-width: 120px; }
+        .col-date { min-width: 130px; }
+        .col-amount { min-width: 110px; }
+        .col-id { min-width: 110px; text-align: center; } /* 新增編號欄位寬度 */
+        .col-name { min-width: 180px; }
+        .col-action { min-width: 50px; text-align: center; }
+        
+        .batch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .mobile-hint { font-size: 0.8rem; color: #6c757d; text-align: center; margin-bottom: 10px; display: none; }
+        @media (max-width: 768px) { .mobile-hint { display: block; } }
     </style>
 </head>
 <body>
 
-    <div id="loading">
-        <div class="spinner-border text-primary" role="status"></div>
-        <p class="mt-3 fw-bold">正在讀取派克教班資料...</p>
-    </div>
+<div class="container-fluid mt-2">
+    <h1 class="header-title">Red 4.0</h1>
+    <div class="card-main">
+        <form id="mainForm">
+            
+            <div class="batch-header">
+                <h5 class="mb-0 fw-bold fs-6">🧾 批量單據 (Matrix Mode)</h5>
+                <button type="button" class="btn btn-sm btn-outline-primary fw-bold" id="addBtn" onclick="addRow()">+ 新增行 (1/10)</button>
+            </div>
+            
+            <div class="mobile-hint">👉 左右滑動表格以填寫完整資料</div>
 
-    <div class="main-container">
-        <h2 class="text-center mb-4 fw-bold"><i class="bi bi-calendar3"></i> 派克教班日期</h2>
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover">
+                    <thead>
+                        <tr>
+                            <th class="col-file">檔案附件</th>
+                            <th class="col-whopay">Who Pay</th>
+                            <th class="col-cat">類別/支付方式</th>
+                            <th class="col-type">Type</th>
+                            <th class="col-date">Date</th>
+                            <th class="col-amount">Amount</th>
+                            <th class="col-id">預覽編號</th> <th class="col-name">Item Name</th>
+                            <th class="col-action">刪除</th>
+                        </tr>
+                    </thead>
+                    <tbody id="itemsContainer">
+                        </tbody>
+                    <tfoot>
+                        <tr>
+                            <th colspan="5" class="text-end align-middle fs-6">總金額 (Total):</th>
+                            <th class="text-danger fs-6 fw-bold align-middle">
+                                $<span id="totalAmount">0.00</span>
+                            </th>
+                            <th colspan="3"></th> </tr>
+                    </tfoot>
+                </table>
+            </div>
+
+            <button type="submit" id="submitBtn" class="btn btn-danger w-100 py-2 fw-bold fs-6 mt-2">確認並傳送全部資料</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx8hdxwUDSs6z75MawUTU1qb70PyrY6WvLkGGIPAfAdPjggSdchWvYjugBsDR7VOiCMCg/exec";
+    let itemCount = 0;
+    const MAX_ITEMS = 10;
+    let rowIdCounter = 0;
+    
+    // 儲存從 Google Sheet 獲取的基礎編號
+    let baseSheetIds = { "工作表1": null, "工作表2": null };
+
+    // Initialize first row on load & Fetch IDs
+    document.addEventListener("DOMContentLoaded", () => { 
+        addRow(); 
+        fetchBaseIds();
+    });
+
+    // 異步獲取兩個工作表的最新編號
+    async function fetchBaseIds() {
+        try {
+            const [res1, res2] = await Promise.all([
+                fetch(`${SCRIPT_URL}?action=getCount&sheetName=${encodeURIComponent('工作表1')}`),
+                fetch(`${SCRIPT_URL}?action=getCount&sheetName=${encodeURIComponent('工作表2')}`)
+            ]);
+            const data1 = await res1.json();
+            const data2 = await res2.json();
+            
+            baseSheetIds["工作表1"] = data1.nextId;
+            baseSheetIds["工作表2"] = data2.nextId;
+            
+            recalculateIds(); // 獲取完成後更新所有行的編號
+        } catch (error) {
+            console.error("無法獲取編號:", error);
+            document.querySelectorAll('.id-preview').forEach(el => el.innerText = "Error");
+        }
+    }
+
+    // 智能推算下一個編號 (支援結尾是數字的字串，例如 RED-005 -> RED-006)
+    function incrementIdStr(idStr, addAmount) {
+        if (!idStr) return "--";
+        if (addAmount === 0) return idStr;
+        let match = idStr.toString().match(/^(.*?)(\d+)$/);
+        if (match) {
+            let prefix = match[1];
+            let numStr = match[2];
+            let num = parseInt(numStr, 10) + addAmount;
+            let newNumStr = num.toString().padStart(numStr.length, '0');
+            return prefix + newNumStr;
+        }
+        return idStr + "(+" + addAmount + ")";
+    }
+
+    // 重新計算清單中所有預覽編號
+    function recalculateIds() {
+        let counters = { "工作表1": 0, "工作表2": 0 };
+        const rows = document.querySelectorAll('#itemsContainer tr');
         
-        <div class="controls-box text-center">
-            <div class="row g-3 text-start mb-3">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師1</label>
-                    <select id="filterTutor1" class="form-select">
-                        <option value="all">顯示所有導師</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取課程</label>
-                    <select id="filterCourse" class="form-select">
-                        <option value="all">顯示所有課程</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">顯示模式</label>
-                    <select id="viewSelect" class="form-select">
-                        <option value="dayGridMonth">月曆視圖 (顯示所有)</option>
-                        <option value="dayGridWeek">一週日曆 (格子)</option>
-                        <option value="listWeek">週列表 (清單)</option>
-                    </select>
-                </div>
-            </div>
+        rows.forEach(row => {
+            const whoPay = row.querySelector('.who-pay-input').value;
+            const sheetName = (whoPay === "Harry Use") ? "工作表1" : "工作表2";
+            const badge = row.querySelector('.id-preview');
             
-            <div class="row g-3 text-start">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師2</label>
-                    <select id="filterTutor2" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師3</label>
-                    <select id="filterTutor3" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">選取導師4</label>
-                    <select id="filterTutor4" class="form-select">
-                        <option value="none">無</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <div id="calendar"></div>
-
-        <div class="controls-box mt-5">
-            <h3 class="text-center mb-4 fw-bold"><i class="bi bi-search"></i> 按學校/課程顯示</h3>
-            <div class="row g-3 text-start">
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">學校名稱 (A行)</label>
-                    <select id="schoolSelect" class="form-select">
-                        <option value="">請先選擇學校...</option>
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold">課程名稱 (I行)</label>
-                    <select id="schoolCourseSelect" class="form-select" disabled>
-                        <option value="">請選擇課程...</option>
-                    </select>
-                </div>
-            </div>
-            <div id="courseDetailsList" class="mt-4 list-group"></div>
-        </div>
-
-        <div class="controls-box mt-5">
-            <h3 class="text-center mb-4 fw-bold"><i class="bi bi-box-seam"></i> 教材安排提示</h3>
-            <div class="row g-3 text-start mb-4">
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">日期 (以週計算)</label>
-                    <select id="matWeekSelect" class="form-select"></select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">學校 (A行)</label>
-                    <select id="matSchoolSelect" class="form-select">
-                        <option value="all">所有學校</option>
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-bold">導師 (G行)</label>
-                    <select id="matTutorSelect" class="form-select">
-                        <option value="all">所有導師</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="materialSummaryBox" class="summary-box mb-4" style="display: none;">
-                <h5 class="fw-bold text-success mb-3"><i class="bi bi-clipboard-check"></i> 本週教材總結</h5>
-                <div id="sendSummaryText" class="mb-2 text-dark"></div>
-                <div id="collectSummaryText" class="text-dark"></div>
-            </div>
-            
-            <div class="row">
-                <div class="col-md-6">
-                    <h5 class="fw-bold text-success mb-3"><i class="bi bi-arrow-right-circle"></i> 送出教材</h5>
-                    <div id="sendMaterialList" class="list-group"></div>
-                </div>
-                <div class="col-md-6 mt-4 mt-md-0">
-                    <h5 class="fw-bold text-danger mb-3"><i class="bi bi-arrow-left-circle"></i> 回收教材</h5>
-                    <div id="collectMaterialList" class="list-group"></div>
-                </div>
-            </div>
-        </div>
-
-    </div>
-
-    <script>
-        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQFFF43IJhu4qgR8KiR_Oo9lwv7LkuTcjHzebpTvUd-SnnivG_5GwDT3-JzEncLTxKXbZuQ8LnU90n3/pub?output=csv';
-        let allEvents = [];
-        let rawSheetData = []; 
-        let calendar;
-
-        const TUTOR_COLORS = {
-            'Harry': 'tutor-border-harry',
-            'Zoe': 'tutor-border-zoe',
-            'Ian': 'tutor-border-ian',
-            'Chris': 'tutor-border-chris'
-        };
-
-        const PRIORITY_TUTORS = ['Harry', 'Zoe', 'Chris', 'Ian'];
-
-        document.addEventListener('DOMContentLoaded', function() {
-            initCalendar();
-            fetchData();
-            
-            ['filterTutor1', 'filterTutor2', 'filterTutor3', 'filterTutor4'].forEach(id => {
-                document.getElementById(id).addEventListener('change', refreshCalendar);
-            });
-            document.getElementById('filterCourse').addEventListener('change', refreshCalendar);
-            document.getElementById('viewSelect').addEventListener('change', (e) => calendar.changeView(e.target.value));
-            
-            setupSchoolCourseListeners();
+            if (baseSheetIds[sheetName] === null) {
+                badge.innerText = "讀取中...";
+                badge.className = "badge bg-warning text-dark id-preview w-100 py-2";
+            } else {
+                const currentId = incrementIdStr(baseSheetIds[sheetName], counters[sheetName]);
+                badge.innerText = currentId;
+                badge.className = "badge bg-info text-dark id-preview w-100 py-2";
+                counters[sheetName]++; // 為下一個同行工作表的項目加 1
+            }
         });
+    }
 
-        function initCalendar() {
-            const isMobile = window.innerWidth < 768;
-            const defaultView = isMobile ? 'listWeek' : 'dayGridMonth';
-            document.getElementById('viewSelect').value = defaultView;
-
-            calendar = new FullCalendar.Calendar(document.getElementById('calendar'), {
-                initialView: defaultView,
-                locale: 'zh-tw',
-                headerToolbar: { left: 'prev,next today', center: 'title', right: '' },
-                eventOrder: "sortOrder,start",
-                dayMaxEvents: false,
-                dayMaxEventRows: false,
-                eventContent: function(arg) {
-                    let p = arg.event.extendedProps;
-                    let colorClass = TUTOR_COLORS[p.tutor] || 'tutor-border-default';
-                    
-                    return {
-                        html: `<div class="${colorClass}" style="padding-left: 5px;">
-                                <div class="event-time">${p.timeStr} <span class="event-tutor">| ${p.tutor}</span></div>
-                                <div class="small text-truncate" style="color:#000">${p.school}</div>
-                               </div>`
-                    };
-                }
-            });
-            calendar.render();
+    function addRow() {
+        if (itemCount >= MAX_ITEMS) {
+            alert(`最多只能新增 ${MAX_ITEMS} 筆！`);
+            return;
         }
+        
+        itemCount++;
+        rowIdCounter++;
+        const tbody = document.getElementById('itemsContainer');
+        const rowId = 'tr-' + rowIdCounter;
+        const defaultDate = new Date().toISOString().split('T')[0];
+        
+        const tr = document.createElement('tr');
+        tr.id = rowId;
+        tr.innerHTML = `
+            <td>
+                <label class="btn btn-sm btn-outline-primary file-btn mb-0 w-100" title="點擊上傳相片或 PDF">
+                    <span class="file-icon">📎</span> <span class="file-text">Attach</span>
+                    <input type="file" class="file-input" accept="image/*,application/pdf" style="display: none;">
+                </label>
+            </td>
+            <td>
+                <select class="form-select form-select-sm who-pay-input" required>
+                    <option value="Harry Use" selected>Harry Use</option>
+                    <option value="Pi Direct payment">Pi Direct payment</option>
+                </select>
+            </td>
+            <td>
+                <select class="form-select form-select-sm category-input" required>
+                    <option value="Harry Claim" selected>Harry Claim</option>
+                    <option value="Harry Personal">Harry Personal</option>
+                </select>
+            </td>
+            <td>
+                <select class="form-select form-select-sm type-input" required>
+                    <option value="Rent">Rent</option>
+                    <option value="Electricity">Electricity</option>
+                    <option value="Logistic">Logistic</option>
+                    <option value="Teaching Material">Teaching Material</option>
+                    <option value="Admin" selected>Admin</option>
+                    <option value="Assets">Assets</option>
+                    <option value="Parking">Parking</option>
+                    <option value="Dinning">Dinning</option>
+                    <option value="Other">Other</option>
+                </select>
+            </td>
+            <td>
+                <input type="date" class="form-control form-control-sm date-input" value="${defaultDate}" required>
+            </td>
+            <td>
+                <input type="number" step="0.01" class="form-control form-control-sm amount-input" placeholder="0.00" required>
+            </td>
+            <td class="text-center">
+                <span class="badge bg-warning text-dark id-preview w-100 py-2">讀取中...</span>
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm name-input" placeholder="名稱" value="-" required>
+            </td>
+            <td class="col-action">
+                ${itemCount > 1 ? `<button type="button" class="btn btn-sm btn-outline-danger border-0" onclick="removeRow('${rowId}')">❌</button>` : ''}
+            </td>
+        `;
+        tbody.appendChild(tr);
+        updateAddButton();
+        calculateTotal();
+        recalculateIds(); // 新增行時重新推算編號
+    }
 
-        function fetchData() {
-            Papa.parse(CSV_URL, {
-                download: true,
-                complete: function(results) {
-                    const rows = results.data;
-                    let tutorSet = new Set();
-                    let courseSet = new Set();
-                    let schoolSetForDisplay = new Set(); 
-                    
-                    rawSheetData = []; 
-
-                    for (let i = 1; i < rows.length; i++) {
-                        let col = rows[i];
-                        if (!col[0] || !col[3]) continue;
-                        
-                        let date = parseDate(col[3]);
-                        
-                        rawSheetData.push({
-                            A: (col[0] || '').trim(),
-                            C: (col[2] || '').trim(),
-                            D: (col[3] || '').trim(),
-                            E: (col[4] || '').trim(),
-                            F: (col[5] || '').trim(),
-                            G: (col[6] || '').trim(),
-                            I: (col[8] || '').trim(),
-                            M: (col.length > 12 ? col[12] : '').trim(),
-                            N: (col.length > 13 ? col[13] : '').trim(),
-                            parsedDate: date
-                        });
-                        
-                        schoolSetForDisplay.add((col[0] || '').trim());
-
-                        if (date) {
-                            let tutorsInRow = col[6] ? col[6].split('/') : ['未指定'];
-                            tutorsInRow.forEach(tName => {
-                                let cleanName = tName.trim();
-                                if(cleanName === "") return;
-                                
-                                let sOrder = PRIORITY_TUTORS.indexOf(cleanName);
-                                if(sOrder === -1) sOrder = 99;
-
-                                allEvents.push({
-                                    title: cleanName + " | " + col[0],
-                                    start: date,
-                                    school: col[0],
-                                    course: col[1],
-                                    timeStr: col[5],
-                                    tutor: cleanName,
-                                    sortOrder: sOrder
-                                });
-                                tutorSet.add(cleanName);
-                            });
-                            if(col[1]) courseSet.add(col[1].trim());
-                        }
-                    }
-                    populateTutorSelect(tutorSet);
-                    populateSelect('filterCourse', courseSet);
-                    populateSchoolSelect(schoolSetForDisplay);
-                    
-                    refreshCalendar();
-                    document.getElementById('loading').style.display = 'none';
-
-                    initMaterialSection(tutorSet, schoolSetForDisplay);
-                }
-            });
+    function removeRow(rowId) {
+        const row = document.getElementById(rowId);
+        if (row) { 
+            row.remove(); 
+            itemCount--; 
+            updateAddButton(); 
+            calculateTotal(); 
+            recalculateIds(); // 移除行時重新推算編號，確保序號連續
         }
+    }
 
-        function parseDate(s) {
-            const m = s.match(/(\d+)年(\d+)月(\d+)日/);
-            return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : null;
-        }
+    function updateAddButton() {
+        const btn = document.getElementById('addBtn');
+        btn.innerText = `+ 新增行 (${itemCount}/${MAX_ITEMS})`;
+        btn.disabled = itemCount >= MAX_ITEMS;
+    }
 
-        function populateTutorSelect(tutorSet) {
-            const selects = [
-                document.getElementById('filterTutor1'),
-                document.getElementById('filterTutor2'),
-                document.getElementById('filterTutor3'),
-                document.getElementById('filterTutor4')
-            ];
-
-            const tutors = Array.from(tutorSet);
-            tutors.sort((a, b) => {
-                let indexA = PRIORITY_TUTORS.indexOf(a);
-                let indexB = PRIORITY_TUTORS.indexOf(b);
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                if (indexA !== -1) return -1;
-                if (indexB !== -1) return 1;
-                return a.localeCompare(b);
-            });
-
-            tutors.forEach(t => {
-                selects.forEach(s => {
-                    let o = document.createElement('option');
-                    o.value = t;
-                    o.text = t;
-                    s.appendChild(o);
-                });
-            });
-        }
-
-        function populateSelect(id, data) {
-            const s = document.getElementById(id);
-            Array.from(data).sort().forEach(t => {
-                let o = document.createElement('option');
-                o.value = o.text = t;
-                s.appendChild(o);
-            });
-        }
-
-        function refreshCalendar() {
-            const t1 = document.getElementById('filterTutor1').value;
-            const t2 = document.getElementById('filterTutor2').value;
-            const t3 = document.getElementById('filterTutor3').value;
-            const t4 = document.getElementById('filterTutor4').value;
-            const c = document.getElementById('filterCourse').value;
-
-            const selectedTutors = [t1, t2, t3, t4].filter(val => val !== 'none');
-            const showAllTutors = selectedTutors.includes('all');
-
-            calendar.removeAllEvents();
-            
-            let filtered = allEvents.filter(e => {
-                const matchTutor = showAllTutors || selectedTutors.includes(e.tutor);
-                const matchCourse = (c === 'all' || e.course === c);
-                return matchTutor && matchCourse;
-            });
-            
-            calendar.addEventSource(filtered);
-        }
-
-        function populateSchoolSelect(schoolSet) {
-            const schoolSelect = document.getElementById('schoolSelect');
-            Array.from(schoolSet).sort().forEach(school => {
-                if(school) {
-                    let opt = document.createElement('option');
-                    opt.value = opt.text = school;
-                    schoolSelect.appendChild(opt);
-                }
-            });
-        }
-
-        function setupSchoolCourseListeners() {
-            const schoolSelect = document.getElementById('schoolSelect');
-            const courseSelect = document.getElementById('schoolCourseSelect');
-            const detailList = document.getElementById('courseDetailsList');
-
-            schoolSelect.addEventListener('change', function() {
-                const selectedSchool = this.value;
-                
-                courseSelect.innerHTML = '<option value="">請選擇課程...</option>';
-                detailList.innerHTML = '';
-                
-                if (!selectedSchool) {
-                    courseSelect.disabled = true;
-                    return;
-                }
-                
-                courseSelect.disabled = false;
-                let courseSetForSchool = new Set();
-                
-                rawSheetData.filter(r => r.A === selectedSchool).forEach(r => {
-                    if (r.I) courseSetForSchool.add(r.I);
-                });
-                
-                Array.from(courseSetForSchool).sort().forEach(c => {
-                    let opt = document.createElement('option');
-                    opt.value = opt.text = c;
-                    courseSelect.appendChild(opt);
-                });
-            });
-
-            courseSelect.addEventListener('change', function() {
-                const selectedSchool = schoolSelect.value;
-                const selectedCourse = this.value;
-                
-                detailList.innerHTML = ''; 
-                
-                if (!selectedCourse) return;
-                
-                const filteredData = rawSheetData.filter(r => r.A === selectedSchool && r.I === selectedCourse);
-                
-                if(filteredData.length === 0) {
-                    detailList.innerHTML = '<div class="list-group-item text-muted">無相關資料</div>';
-                    return;
-                }
-
-                filteredData.forEach(r => {
-                    let item = document.createElement('div');
-                    item.className = 'list-group-item detail-item';
-                    
-                    item.innerHTML = `<strong>${r.A}</strong> - ${r.I} - ${r.C} - ${r.G} - ${r.D} - ${r.E} - ${r.F}`;
-                    detailList.appendChild(item);
-                });
-            });
-        }
-
-        // ======== 教材安排提示功能區塊 ========
-
-        function initMaterialSection(tutorSet, schoolSet) {
-            const schoolSelect = document.getElementById('matSchoolSelect');
-            Array.from(schoolSet).sort().forEach(school => {
-                if(school) {
-                    let opt = document.createElement('option');
-                    opt.value = opt.text = school;
-                    schoolSelect.appendChild(opt);
-                }
-            });
-
-            const tutorSelect = document.getElementById('matTutorSelect');
-            const tutors = Array.from(tutorSet).sort((a, b) => {
-                let indexA = PRIORITY_TUTORS.indexOf(a);
-                let indexB = PRIORITY_TUTORS.indexOf(b);
-                if (indexA !== -1 && indexB !== -1) return indexA - indexB;
-                if (indexA !== -1) return -1;
-                if (indexB !== -1) return 1;
-                return a.localeCompare(b);
-            });
-            tutors.forEach(t => {
-                let opt = document.createElement('option');
-                opt.value = opt.text = t;
-                tutorSelect.appendChild(opt);
-            });
-
-            generateWeeks();
-
-            document.getElementById('matWeekSelect').addEventListener('change', updateMaterialPrompt);
-            document.getElementById('matSchoolSelect').addEventListener('change', updateMaterialPrompt);
-            document.getElementById('matTutorSelect').addEventListener('change', updateMaterialPrompt);
-
-            updateMaterialPrompt();
-        }
-
-        function generateWeeks() {
-            const select = document.getElementById('matWeekSelect');
-            let dates = rawSheetData.map(r => r.parsedDate).filter(d => d);
-            if (dates.length === 0) return;
-
-            dates.sort();
-            let minDateStr = dates[0];
-            let maxDateStr = dates[dates.length - 1];
-
-            let minDate = new Date(minDateStr);
-            let maxDate = new Date(maxDateStr);
-
-            let startSunday = new Date(minDate);
-            startSunday.setDate(startSunday.getDate() - startSunday.getDay());
-
-            let endSaturday = new Date(maxDate);
-            endSaturday.setDate(endSaturday.getDate() + (6 - endSaturday.getDay()));
-
-            let currentSunday = new Date(startSunday);
-            let todayStr = formatDate(new Date());
-            let selectedValue = "";
-
-            while (currentSunday <= endSaturday) {
-                let currentSaturday = new Date(currentSunday);
-                currentSaturday.setDate(currentSaturday.getDate() + 6);
-
-                let startStr = formatDate(currentSunday);
-                let endStr = formatDate(currentSaturday);
-                let val = `${startStr}|${endStr}`;
-                
-                let opt = document.createElement('option');
-                opt.value = val;
-                opt.text = `${startStr} ~ ${endStr}`;
-
-                if (todayStr >= startStr && todayStr <= endStr) {
-                    selectedValue = val;
-                }
-
-                select.appendChild(opt);
-                currentSunday.setDate(currentSunday.getDate() + 7);
+    // Calculate Total Amount
+    function calculateTotal() {
+        let total = 0;
+        const amountInputs = document.querySelectorAll('.amount-input');
+        amountInputs.forEach(input => {
+            const val = parseFloat(input.value);
+            if (!isNaN(val)) {
+                total += val;
             }
+        });
+        document.getElementById('totalAmount').innerText = total.toFixed(2);
+    }
 
-            if (selectedValue) {
-                select.value = selectedValue;
-            } else if (select.options.length > 0) {
-                select.selectedIndex = select.options.length - 1;
-            }
-        }
+    // Handle interactions inside the table matrix
+    document.getElementById('itemsContainer').addEventListener('change', function(e) {
+        const row = e.target.closest('tr');
+        if (!row) return;
 
-        function formatDate(d) {
-            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-        }
+        // Handle File Selection directly within the row
+        if (e.target.classList.contains('file-input')) {
+            const file = e.target.files[0];
+            const labelBtn = row.querySelector('.file-btn');
+            const fileText = row.querySelector('.file-text');
+            const fileIcon = row.querySelector('.file-icon');
 
-        function updateMaterialPrompt() {
-            const weekVal = document.getElementById('matWeekSelect').value;
-            const schoolVal = document.getElementById('matSchoolSelect').value;
-            const tutorVal = document.getElementById('matTutorSelect').value;
-
-            const sendList = document.getElementById('sendMaterialList');
-            const collectList = document.getElementById('collectMaterialList');
-            
-            const summaryBox = document.getElementById('materialSummaryBox');
-            const sendSumDiv = document.getElementById('sendSummaryText');
-            const collectSumDiv = document.getElementById('collectSummaryText');
-
-            sendList.innerHTML = '';
-            collectList.innerHTML = '';
-
-            if (!weekVal) return;
-
-            const [weekStartStr, weekEndStr] = weekVal.split('|');
-            
-            let groups = {};
-            rawSheetData.forEach(r => {
-                if (!r.A || !r.M || !r.parsedDate) return; 
-                
-                let key = r.A + "|||" + r.M;
-                if (!groups[key]) {
-                    groups[key] = [];
-                }
-                groups[key].push(r);
-            });
-
-            let sends = [];
-            let collects = [];
-
-            for (let key in groups) {
-                let rows = groups[key];
-                rows.sort((a, b) => a.parsedDate.localeCompare(b.parsedDate));
-
-                let firstRow = rows[0];
-                let lastRow = rows[rows.length - 1];
-
-                if (firstRow.parsedDate >= weekStartStr && firstRow.parsedDate <= weekEndStr) {
-                    let matchSchool = (schoolVal === 'all' || firstRow.A === schoolVal);
-                    let tutors = firstRow.G ? firstRow.G.split('/').map(t => t.trim()) : [];
-                    let matchTutor = (tutorVal === 'all' || tutors.includes(tutorVal));
-                    
-                    if (matchSchool && matchTutor) {
-                        sends.push(firstRow);
-                    }
-                }
-
-                if (lastRow.parsedDate >= weekStartStr && lastRow.parsedDate <= weekEndStr) {
-                    let matchSchool = (schoolVal === 'all' || lastRow.A === schoolVal);
-                    let tutors = lastRow.G ? lastRow.G.split('/').map(t => t.trim()) : [];
-                    let matchTutor = (tutorVal === 'all' || tutors.includes(tutorVal));
-                    
-                    if (matchSchool && matchTutor) {
-                        collects.push(lastRow);
-                    }
-                }
-            }
-
-            // --- 總結計算邏輯 ---
-            let sendSummary = {};
-            sends.forEach(r => {
-                let m = r.M;
-                // 用 parseFloat 抓取數字，若填寫 "15包" 會抓到 15。若沒填或無法轉換則為 0
-                let num = parseFloat(r.N) || 0;
-                sendSummary[m] = (sendSummary[m] || 0) + num;
-            });
-
-            let collectSummary = {};
-            collects.forEach(r => {
-                let m = r.M;
-                let num = parseFloat(r.N) || 0;
-                collectSummary[m] = (collectSummary[m] || 0) + num;
-            });
-
-            // --- 渲染總結區塊 ---
-            let sendKeys = Object.keys(sendSummary);
-            let collectKeys = Object.keys(collectSummary);
-
-            if (sendKeys.length === 0 && collectKeys.length === 0) {
-                summaryBox.style.display = 'none';
+            if (file) {
+                row.fileData = file; // Store file data on the row element
+                labelBtn.classList.add('attached');
+                labelBtn.classList.remove('btn-outline-primary');
+                fileIcon.innerText = "✅";
+                // Shorten filename to keep matrix clean
+                let shortName = file.name;
+                if (shortName.length > 8) shortName = shortName.substring(0, 8) + '...';
+                fileText.innerText = shortName;
             } else {
-                summaryBox.style.display = 'block';
-                
-                if (sendKeys.length > 0) {
-                    let sText = sendKeys.map(m => `${m}（${sendSummary[m]}個）`).join('、');
-                    sendSumDiv.innerHTML = `<strong>需準備送出：</strong> ${sText}`;
-                } else {
-                    sendSumDiv.innerHTML = `<strong>需準備送出：</strong> 無`;
-                }
-
-                if (collectKeys.length > 0) {
-                    let cText = collectKeys.map(m => `${m}（${collectSummary[m]}個）`).join('、');
-                    collectSumDiv.innerHTML = `<strong>預期可回收：</strong> ${cText}`;
-                } else {
-                    collectSumDiv.innerHTML = `<strong>預期可回收：</strong> 無`;
-                }
-            }
-
-            // --- 渲染列表 ---
-            if (sends.length === 0) {
-                sendList.innerHTML = '<div class="list-group-item text-muted">本週無送出教材</div>';
-            } else {
-                sends.forEach(r => {
-                    let div = document.createElement('div');
-                    div.className = 'list-group-item detail-item';
-                    div.innerHTML = `<strong>${r.A}</strong>-${r.D}-${r.E}-${r.G}-${r.M}-數量：${r.N}`;
-                    sendList.appendChild(div);
-                });
-            }
-
-            if (collects.length === 0) {
-                collectList.innerHTML = '<div class="list-group-item text-muted">本週無回收教材</div>';
-            } else {
-                collects.forEach(r => {
-                    let div = document.createElement('div');
-                    div.className = 'list-group-item detail-item';
-                    div.innerHTML = `<strong>${r.A}</strong>-${r.D}-${r.E}-${r.G}-${r.M}-數量：${r.N}`;
-                    collectList.appendChild(div);
-                });
+                row.fileData = null;
+                labelBtn.classList.remove('attached');
+                labelBtn.classList.add('btn-outline-primary');
+                fileIcon.innerText = "📎";
+                fileText.innerText = "Attach";
             }
         }
-    </script>
+
+        // Handle Who Pay -> Category link & Recalculate IDs
+        if (e.target.classList.contains('who-pay-input')) {
+            const cat = row.querySelector('.category-input');
+            cat.disabled = false;
+            cat.innerHTML = "";
+            const opts = e.target.value === "Harry Use" 
+                ? ["Harry Claim", "Harry Personal"] 
+                : ["HS", "HSBC", "HS cheque", "HSBC cheque", "HSBC Credit Card"];
+            opts.forEach(o => cat.add(new Option(o, o)));
+            
+            // Set explicit default for Harry Use when switched back
+            if (e.target.value === "Harry Use") {
+                cat.value = "Harry Claim";
+            }
+            
+            recalculateIds(); // 切換 Who Pay 會影響歸屬的工作表，因此重新推算全表編號
+        }
+    });
+
+    // Listen for input events specifically for the calculator
+    document.getElementById('itemsContainer').addEventListener('input', function(e) {
+        if (e.target.classList.contains('amount-input')) {
+            calculateTotal();
+        }
+    });
+
+    // Helper to read files
+    function getBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = error => reject(error);
+        });
+    }
+
+    // Submit Form Data
+    document.getElementById('mainForm').onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const itemRows = document.querySelectorAll('#itemsContainer tr');
+        const itemsToSubmit = [];
+
+        // Validate and gather all data
+        for (let i = 0; i < itemRows.length; i++) {
+            const row = itemRows[i];
+            const file = row.fileData;
+            
+            if (!file) {
+                alert(`第 ${i+1} 行尚未上傳附件！請點擊 📎 Attach 上傳。`);
+                return; // Stop submission
+            }
+
+            const whoPayVal = row.querySelector('.who-pay-input').value;
+            itemsToSubmit.push({
+                file: file,
+                whoPay: whoPayVal,
+                category: row.querySelector('.category-input').value,
+                sheetName: (whoPayVal === "Harry Use") ? "工作表1" : "工作表2",
+                type: row.querySelector('.type-input').value,
+                date: row.querySelector('.date-input').value,
+                amount: row.querySelector('.amount-input').value,
+                itemName: row.querySelector('.name-input').value
+            });
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        let successCount = 0;
+
+        // Submit API calls sequentially
+        for (let i = 0; i < itemsToSubmit.length; i++) {
+            btn.innerText = `⏳ 傳送中... (${i + 1}/${itemsToSubmit.length})`;
+            const item = itemsToSubmit[i];
+            
+            try {
+                const base64File = await getBase64(item.file);
+                const payload = {
+                    whoPay: item.whoPay,
+                    category: item.category,
+                    sheetName: item.sheetName,
+                    image: base64File,
+                    mimeType: item.file.type,
+                    type: item.type,
+                    date: item.date,
+                    itemName: item.itemName,
+                    amount: item.amount
+                };
+
+                await fetch(SCRIPT_URL, { 
+                    method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) 
+                });
+                successCount++;
+            } catch (err) {
+                console.error(`第 ${i + 1} 筆上傳失敗:`, err);
+            }
+        }
+
+        if (successCount === itemsToSubmit.length) {
+            alert(`✅ 成功上傳 ${successCount} 筆資料！\n總金額：$${document.getElementById('totalAmount').innerText}`);
+            location.reload();
+        } else {
+            alert(`⚠️ 上傳完成，但有 ${itemsToSubmit.length - successCount} 筆失敗，請檢查網路連線。`);
+            btn.disabled = false;
+            btn.innerText = "重新傳送失敗項目";
+        }
+    };
+</script>
 </body>
 </html>
