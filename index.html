@@ -1,211 +1,104 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webcam 即時中文辨識</title>
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <title>電子剪報</title>
     <style>
-        body {
-            font-family: "Microsoft JhengHei", sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f4f4f9;
-            padding: 20px;
-        }
-        h2 { color: #333; }
-        
-        /* 鏡頭畫面樣式 */
-        #webcam {
-            width: 100%;
-            max-width: 640px;
-            height: auto;
-            background-color: #000;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            transition: transform 0.3s ease;
-        }
-        
-        /* 鏡頭水平翻轉的 CSS Class */
-        .flipped {
-            transform: scaleX(-1);
-        }
-
-        .controls {
-            margin: 15px 0;
-            display: flex;
-            gap: 15px;
-        }
-
-        button {
-            padding: 10px 20px;
-            font-size: 16px;
-            cursor: pointer;
-            border: none;
-            border-radius: 5px;
-            background-color: #007bff;
-            color: white;
-            transition: background-color 0.2s;
-        }
-        
-        button:hover { background-color: #0056b3; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        
-        #flipBtn { background-color: #28a745; }
-        #flipBtn:hover { background-color: #1e7e34; }
-
-        /* 辨識結果文字框 */
-        #resultBox {
-            width: 100%;
-            max-width: 640px;
-            height: 150px;
-            font-size: 18px;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid #ccc;
-            resize: vertical;
-        }
-
-        /* 隱藏用於截圖的 Canvas */
-        #captureCanvas {
-            display: none;
-        }
-        
-        #statusText {
-            margin-bottom: 10px;
-            color: #d9534f;
-            font-weight: bold;
-        }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f7f9; padding: 20px; }
+        .container { max-width: 400px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; margin-bottom: 20px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; color: #34495e; }
+        select, input, textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font-size: 16px; }
+        textarea { resize: vertical; height: 100px; }
+        button { width: 100%; padding: 15px; background-color: #3498db; color: white; border: none; border-radius: 8px; font-size: 18px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        button:active { background-color: #2980b9; }
+        #status { text-align: center; margin-top: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
 
-    <h2>即時鏡頭文字辨識 (OCR)</h2>
+<div class="container">
+    <h2>電子剪報</h2>
+    <form id="clippingForm">
+        <div class="form-group">
+            <label for="user">User</label>
+            <select id="user" name="user">
+                <option value="Harry" selected>Harry</option>
+                <option value="Zoe">Zoe</option>
+                <option value="Ian">Ian</option>
+                <option value="Chris">Chris</option>
+            </select>
+        </div>
 
-    <video id="webcam" autoplay playsinline></video>
+        <div class="form-group">
+            <label for="category">類別</label>
+            <select id="category" name="category">
+                <option value="AI">AI</option>
+                <option value="LEGO">LEGO</option>
+                <option value="發明品相關">發明品相關</option>
+                <option value="新聞與生活議題">新聞與生活議題</option>
+            </select>
+        </div>
 
-    <div class="controls">
-        <button id="flipBtn">↔️ 鏡頭水平翻轉</button>
-    </div>
-    
-    <div class="controls">
-        <button id="startBtn">▶️ 開始辨識</button>
-    </div>
+        <div class="form-group">
+            <label for="remark">Remark (備註)</label>
+            <textarea id="remark" name="remark" placeholder="請輸入備註內容..."></textarea>
+        </div>
 
-    <div id="statusText">系統就緒，等待開始...</div>
+        <div class="form-group">
+            <label for="link">連結</label>
+            <input type="url" id="link" name="link" placeholder="https://..." required>
+        </div>
 
-    <textarea id="resultBox" placeholder="文字辨識結果將顯示於此..." readonly></textarea>
+        <button type="submit" id="submitBtn">發送資料</button>
+    </form>
+    <div id="status"></div>
+</div>
 
-    <canvas id="captureCanvas"></canvas>
+<script>
+    // 已經替換為您的專屬 Google Apps Script 網頁應用程式網址
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxrSETG908jLrUMdAbwwS3Wk_IFi3FWZUkA538s2H2f2O1AV173rUglD4IPr1M51QxI9Q/exec";
 
-    <script>
-        const video = document.getElementById('webcam');
-        const flipBtn = document.getElementById('flipBtn');
-        const startBtn = document.getElementById('startBtn');
-        const resultBox = document.getElementById('resultBox');
-        const canvas = document.getElementById('captureCanvas');
-        const statusText = document.getElementById('statusText');
-        const ctx = canvas.getContext('2d');
+    const form = document.getElementById('clippingForm');
+    const status = document.getElementById('status');
+    const btn = document.getElementById('submitBtn');
 
-        let worker = null;
-        let isRecognizing = false;
-        let intervalId = null;
-        let isProcessingFrame = false; // 防止辨識速度跟不上 1 秒的間隔而造成卡頓
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        btn.disabled = true;
+        btn.innerText = "傳送中...";
+        status.innerText = "";
 
-        // 1. 初始化並開啟 USB 鏡頭
-        async function initCamera() {
-            try {
-                // 請求影像權限，預設使用後置或一般 USB 鏡頭
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 } 
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("無法存取鏡頭:", err);
-                statusText.innerText = "無法存取鏡頭，請確認權限或裝置是否正常連接。";
-                statusText.style.color = "red";
-            }
-        }
+        const formData = new FormData(form);
+        const queryString = new URLSearchParams(formData).toString();
 
-        // 2. 鏡頭水平翻轉功能 (純視覺翻轉，不影響辨識)
-        flipBtn.addEventListener('click', () => {
-            video.classList.toggle('flipped');
+        // 使用 fetch 發送到 GAS
+        fetch(`${WEB_APP_URL}?${queryString}`, {
+            method: 'POST',
+            mode: 'no-cors' // 避免跨網域(CORS)報錯，但無法讀取回傳內容
+        })
+        .then(() => {
+            // 因為用了 no-cors，無論成功失敗都會走到這裡，我們直接當作成功處理
+            status.style.color = "green";
+            status.innerText = "✅ 提交成功！";
+            form.reset();
+            // 重設預設值
+            document.getElementById('user').value = "Harry";
+        })
+        .catch(error => {
+            status.style.color = "red";
+            status.innerText = "❌ 發生錯誤，請檢查網路連線";
+            console.error(error);
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerText = "發送資料";
         });
+    });
+</script>
 
-        // 3. 開始 / 停止辨識邏輯
-        startBtn.addEventListener('click', async () => {
-            // 如果已經在辨識中，則執行「停止」邏輯
-            if (isRecognizing) {
-                clearInterval(intervalId);
-                isRecognizing = false;
-                startBtn.innerText = "▶️ 開始辨識";
-                startBtn.style.backgroundColor = "#007bff";
-                statusText.innerText = "已停止辨識。";
-                statusText.style.color = "#333";
-                return;
-            }
-
-            // 啟動辨識前的準備
-            startBtn.disabled = true;
-            statusText.innerText = "正在載入 AI 中文辨識模型 (初次載入需時較長，請稍候)...";
-            statusText.style.color = "#f0ad4e";
-
-            try {
-                // 初始化 Tesseract Worker (載入繁體中文 chi_tra，若需簡體可用 chi_sim)
-                if (!worker) {
-                    worker = await Tesseract.createWorker('chi_tra');
-                }
-
-                // 設定 Canvas 尺寸與影片原始尺寸一致，以確保影像清晰度
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-
-                isRecognizing = true;
-                startBtn.innerText = "⏹️ 停止辨識";
-                startBtn.style.backgroundColor = "#d9534f";
-                startBtn.disabled = false;
-                statusText.innerText = "辨識中... (每秒偵測一次)";
-                statusText.style.color = "#5cb85c";
-
-                // 每 1 秒 (1000 毫秒) 執行一次辨識
-                intervalId = setInterval(async () => {
-                    // 如果上一幀還沒辨識完，則跳過這次，避免瀏覽器當機
-                    if (isProcessingFrame) return; 
-                    
-                    isProcessingFrame = true;
-
-                    // 將當前影片畫面繪製到隱藏的 Canvas 上
-                    // 注意：即使影片被 CSS 翻轉，canvas 仍會擷取未翻轉的原始畫面，這正是文字辨識需要的正確方向
-                    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                    try {
-                        // 將 Canvas 圖片送入 Tesseract 進行文字辨識
-                        const { data: { text } } = await worker.recognize(canvas);
-                        
-                        // 若有辨識出文字，更新到文字框內
-                        if (text.trim() !== "") {
-                            resultBox.value = text.trim();
-                        }
-                    } catch (error) {
-                        console.error("辨識發生錯誤:", error);
-                    } finally {
-                        isProcessingFrame = false; // 解鎖，允許進行下一次辨識
-                    }
-
-                }, 1000);
-
-            } catch (error) {
-                console.error("載入模型失敗:", error);
-                statusText.innerText = "載入模型失敗，請檢查網路連線。";
-                statusText.style.color = "red";
-                startBtn.disabled = false;
-            }
-        });
-
-        // 網頁載入時自動啟動鏡頭
-        window.onload = initCamera;
-
-    </script>
 </body>
 </html>
